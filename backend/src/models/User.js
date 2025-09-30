@@ -3,45 +3,35 @@ const database = require('../config/database');
 const sequelize = database.sequelize;
 
 const User = sequelize.define('User', {
-    user_id: {
+    id: {
         type: DataTypes.INTEGER,
         primaryKey: true,
         autoIncrement: true,
         allowNull: false
     },
-    user_surname: {
-        type: DataTypes.STRING(50),
-        allowNull: true
+    full_name: {
+        type: DataTypes.STRING(100),
+        allowNull: false
     },
-    user_name: {
-        type: DataTypes.STRING(50),
-        allowNull: true
-    },
-    user_patronymic: {
-        type: DataTypes.STRING(50),
-        allowNull: true
-    },
-    user_role: {
-        type: DataTypes.STRING(15),
+    email: {
+        type: DataTypes.STRING(100),
         allowNull: false,
+        unique: true,
         validate: {
-            correct_role(value) {
-                const roles = ['Менеджер', 'Инженер', 'Наблюдатель'];
-
-                if (!roles.includes(value)) {
-                    return new Error('Некорректная роль.');
-                }
-            }
+            isEmail: true
         }
     },
-    user_email: {
-        type: DataTypes.STRING(30),
-        allowNull: false,
-        unique: true
-    },
-    user_password: {
-        type: DataTypes.STRING(20),
+    password: {
+        type: DataTypes.STRING(255),
         allowNull: false
+    },
+    role_id: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        references: {
+            model: 'roles',
+            key: 'id'
+        }
     }
 }, {
     tableName: 'users',
