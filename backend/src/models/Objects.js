@@ -2,7 +2,7 @@ const { DataTypes } = require('sequelize');
 const database = require('../config/database');
 const sequelize = database.sequelize;
 
-const Object = sequelize.define('Object', {
+const Objects = sequelize.define('Objects', {
     id: {
         type: DataTypes.INTEGER,
         primaryKey: true,
@@ -34,4 +34,4 @@ const Object = sequelize.define('Object', {
     timestamps: false
 });
 
-module.exports = Object;
+module.exports = Objects;

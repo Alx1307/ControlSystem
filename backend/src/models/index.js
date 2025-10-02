@@ -1,7 +1,7 @@
 const User = require('./User');
 const Role = require('./Role');
 const DefectPriority = require('./DefectPriority');
-const Object = require('./Objects');
+const Objects = require('./Objects');
 const Defect = require('./Defect');
 const Comment = require('./Comment');
 const Attachment = require('./Attachment');
@@ -11,8 +11,8 @@ const DefectStatus = require('./DefectStatus');
 Role.hasMany(User, { foreignKey: 'role_id' });
 User.belongsTo(Role, { foreignKey: 'role_id', as: 'role' });
 
-Object.hasMany(Defect, { foreignKey: 'object_id' });
-Defect.belongsTo(Object, { foreignKey: 'object_id', as: 'object' });
+Objects.hasMany(Defect, { foreignKey: 'object_id' });
+Defect.belongsTo(Objects, { foreignKey: 'object_id', as: 'object' });
 
 DefectStatus.hasMany(Defect, { foreignKey: 'status_id' });
 Defect.belongsTo(DefectStatus, { foreignKey: 'status_id', as: 'status' });
@@ -44,7 +44,7 @@ module.exports = {
     User,
     Role,
     DefectPriority,
-    Object,
+    Objects,
     Defect,
     Comment,
     Attachment,
