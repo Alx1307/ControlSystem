@@ -174,6 +174,61 @@ class UserController {
         }
     }
 
+    async addUser(req, res) {
+        try {
+            const { email, role: roleName } = req.body;
+            const currentUser = req.user;
+    
+            if (currentUser.role !== 'Менеджер') {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Только менеджеры могут добавлять пользователей.'
+                });
+            }
+    
+            const existingUser = await this.User.findOne({ where: { email } });
+            if (existingUser) {
+                return res.status(409).json({
+                    success: false,
+                    message: 'Пользователь с таким email уже существует.'
+                });
+            }
+    
+            const role = await Role.findOne({ where: { name: roleName } });
+            if (!role) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Роль "${roleName}" не существует. Доступные роли: Менеджер, Инженер, Наблюдатель.`
+                });
+            }
+    
+            const newUser = await this.User.create({
+                email,
+                full_name: null,
+                password: null,
+                role_id: role.id,
+            });
+    
+            res.status(201).json({
+                success: true,
+                message: 'Пользователь успешно добавлен.',
+                user: {
+                    id: newUser.id,
+                    email: newUser.email,
+                    role: role.name
+                }
+            });
+    
+        } catch (error) {
+            console.error('Ошибка при добавлении пользователя:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Ошибка сервера при добавлении пользователя.',
+                error: error.message
+            });
+        }
+    }
+
     async getAllUsers(req, res) {
         try {
             const currentUser = req.user;
