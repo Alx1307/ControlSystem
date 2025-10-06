@@ -8,32 +8,45 @@ class ObjectsController {
         this.Objects = ObjectModel;
     }
 
+    async _setCurrentUserId(userId, transaction) {
+        await sequelize.query('SET LOCAL app.current_user_id = :userId',
+            { replacements: { userId: userId.toString() }, transaction });
+    }
+
     async addObject(req, res) {
+        const transaction = await sequelize.transaction();
         try {
             const { name, description, address, start_date, end_date } = req.body;
             const currentUser = req.user;
-    
+
+            await this._setCurrentUserId(currentUser.id, transaction);
+
             if (currentUser.role !== 'Менеджер') {
+                await transaction.rollback();
                 return res.status(403).json({
                     success: false,
                     message: 'Только менеджеры могут создавать объекты.'
                 });
             }
-    
+
             const newObject = await this.Objects.create({
                 name,
                 description,
                 address,
                 start_date: start_date || null,
-                end_date: end_date || null
-            });
-    
+                end_date: end_date || null,
+                manager_id: currentUser.id
+            }, { transaction });
+
+            await transaction.commit();
+
             res.status(201).json({
                 success: true,
                 message: 'Объект успешно создан.',
                 object: newObject
             });
         } catch (error) {
+            await transaction.rollback();
             console.error('Ошибка при создании объекта:', error);
             res.status(500).json({
                 success: false,
@@ -41,7 +54,7 @@ class ObjectsController {
                 error: error.message
             });
         }
-    } 
+    }
     
     async getAllObjects(req, res) {
         try {
@@ -100,40 +113,49 @@ class ObjectsController {
     }
     
     async updateObject(req, res) {
+        const transaction = await sequelize.transaction();
         try {
             const { objectId } = req.params;
             const { name, description, address, start_date, end_date } = req.body;
             const currentUser = req.user;
-    
-            if (currentUser.role !== 'Менеджер') {
-                return res.status(403).json({
-                    success: false,
-                    message: 'Только менеджеры могут обновлять объекты.'
-                });
-            }
-    
-            const object = await this.Objects.findByPk(objectId);
+
+            await this._setCurrentUserId(currentUser.id, transaction);
+
+            const object = await this.Objects.findByPk(objectId, { transaction });
             if (!object) {
+                await transaction.rollback();
                 return res.status(404).json({
                     success: false,
                     message: 'Объект не найден.'
                 });
             }
-    
+
+            if (currentUser.role !== 'Менеджер') {
+                await transaction.rollback();
+                return res.status(403).json({
+                    success: false,
+                    message: 'Только менеджеры могут обновлять объекты.'
+                });
+            }
+
             await object.update({
                 name: name || object.name,
                 description: description || object.description,
                 address: address || object.address,
                 start_date: start_date || object.start_date,
-                end_date: end_date || object.end_date
-            });
-    
+                end_date: end_date || object.end_date,
+                manager_id: currentUser.id
+            }, { transaction });
+
+            await transaction.commit();
+
             res.status(200).json({
                 success: true,
                 message: 'Объект успешно обновлен.',
                 object
             });
         } catch (error) {
+            await transaction.rollback();
             console.error('Ошибка при обновлении объекта:', error);
             res.status(500).json({
                 success: false,
@@ -144,32 +166,40 @@ class ObjectsController {
     }
 
     async deleteObject(req, res) {
+        const transaction = await sequelize.transaction();
         try {
             const { objectId } = req.params;
             const currentUser = req.user;
-    
-            if (currentUser.role !== 'Менеджер') {
-                return res.status(403).json({
-                    success: false,
-                    message: 'Доступ запрещен. Только менеджеры могут удалять объекты.'
-                });
-            }
-    
-            const object = await this.Objects.findByPk(objectId);
+
+            await this._setCurrentUserId(currentUser.id, transaction);
+
+            const object = await this.Objects.findByPk(objectId, { transaction });
             if (!object) {
+                await transaction.rollback();
                 return res.status(404).json({
                     success: false,
                     message: 'Объект не найден.'
                 });
             }
-    
-            await object.destroy();
-    
+
+            if (currentUser.role !== 'Менеджер') {
+                await transaction.rollback();
+                return res.status(403).json({
+                    success: false,
+                    message: 'Доступ запрещен. Только менеджеры могут удалять объекты.'
+                });
+            }
+
+            await object.destroy({ transaction });
+
+            await transaction.commit();
+
             res.status(200).json({
                 success: true,
                 message: 'Объект успешно удален.'
             });
         } catch (error) {
+            await transaction.rollback();
             console.error('Ошибка при удалении объекта:', error);
             res.status(500).json({
                 success: false,
