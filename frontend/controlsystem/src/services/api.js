@@ -57,4 +57,32 @@ export const authAPI = {
     api.delete(`/users/${userId}`),
 };
 
+export const objectsAPI = {
+    getAllObjects: (params = {}) => 
+        api.get('/objects/all', { params }),
+
+    getObject: (objectId) => 
+        api.get(`/objects/get/${objectId}`),
+
+    addObject: (data) => 
+        api.post('/objects/add', data),
+
+    updateObject: (objectId, data) => 
+        api.patch(`/objects/${objectId}`, data),
+
+    deleteObject: (objectId) => 
+        api.delete(`/objects/${objectId}`),
+
+    searchObjects: (params) => 
+        api.get('/objects/search', { params }),
+};
+
+export const historyAPI = {
+    getObjectHistory: (objectId, params = {}) => 
+        api.get(`/history/object/${objectId}`, { params }),
+
+    getDefectHistory: (defectId, params = {}) =>
+        api.get(`/history/defect/${defectId}`, { params })
+};
+
 export default api;
