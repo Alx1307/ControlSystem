@@ -12,7 +12,14 @@ import {
   Container,
   IconButton,
   Typography,
-  Button
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Alert,
+  CircularProgress
 } from '@mui/material';
 import {
   Business as BusinessIcon,
@@ -21,11 +28,23 @@ import {
   Menu as MenuIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { authAPI } from '../../services/api';
 
 const drawerWidth = 240;
 
 const Layout = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [profileData, setProfileData] = useState({
+    full_name: '',
+    email: ''
+  });
+  const [formErrors, setFormErrors] = useState({});
+  
   const navigate = useNavigate();
   const location = useLocation();
   const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -47,6 +66,92 @@ const Layout = ({ children }) => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     navigate('/login');
+  };
+
+  const handleLogoutClick = () => {
+    setLogoutDialogOpen(true);
+  };
+
+  const confirmLogout = () => {
+    handleLogout();
+    setLogoutDialogOpen(false);
+  };
+
+  const cancelLogout = () => {
+    setLogoutDialogOpen(false);
+  };
+
+  const handleProfileClick = () => {
+    setProfileData({
+      full_name: user.full_name || '',
+      email: user.email || ''
+    });
+    setFormErrors({});
+    setError('');
+    setSuccess('');
+    setProfileDialogOpen(true);
+  };
+
+  const handleProfileUpdate = async () => {
+    const errors = {};
+    if (!profileData.full_name?.trim()) {
+      errors.full_name = 'ФИО обязательно';
+    }
+    if (!profileData.email?.trim()) {
+      errors.email = 'Email обязателен';
+    } else if (!/\S+@\S+\.\S+/.test(profileData.email)) {
+      errors.email = 'Введите корректный email';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const response = await authAPI.updateUser(user.id, {
+        full_name: profileData.full_name.trim(),
+        email: profileData.email.trim()
+      });
+
+      if (response.data.success) {
+        setSuccess('Данные успешно обновлены');
+        
+        const updatedUser = {
+          ...user,
+          full_name: profileData.full_name.trim(),
+          email: profileData.email.trim()
+        };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        
+        setTimeout(() => {
+          setProfileDialogOpen(false);
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      setError(error.response?.data?.message || 'Ошибка при обновлении данных');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleProfileChange = (field, value) => {
+    setProfileData(prev => ({ ...prev, [field]: value }));
+    if (formErrors[field]) {
+      setFormErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
+  const closeProfileDialog = () => {
+    setProfileDialogOpen(false);
+    setFormErrors({});
+    setError('');
+    setSuccess('');
   };
 
   const drawer = (
@@ -109,10 +214,22 @@ const Layout = ({ children }) => {
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             Панель управления
           </Typography>
-          <Typography variant="body1" component="span" sx={{ mr: 2 }}>
+          <Typography 
+            variant="body1" 
+            component="span" 
+            sx={{ 
+              mr: 2, 
+              cursor: 'pointer',
+              textDecoration: 'underline',
+              '&:hover': {
+                opacity: 0.8
+              }
+            }}
+            onClick={handleProfileClick}
+          >
             {user.full_name} ({user.role})
           </Typography>
-          <Button color="inherit" onClick={handleLogout}>
+          <Button color="inherit" onClick={handleLogoutClick}>
             Выйти
           </Button>
         </Toolbar>
@@ -168,6 +285,82 @@ const Layout = ({ children }) => {
           {children}
         </Container>
       </Box>
+
+      <Dialog open={profileDialogOpen} onClose={closeProfileDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Редактирование профиля</DialogTitle>
+        <DialogContent>
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
+              {error}
+            </Alert>
+          )}
+
+          {success && (
+            <Alert severity="success" sx={{ mb: 2 }}>
+              {success}
+            </Alert>
+          )}
+
+          <TextField
+            autoFocus
+            margin="dense"
+            label="ФИО"
+            fullWidth
+            variant="outlined"
+            value={profileData.full_name}
+            onChange={(e) => handleProfileChange('full_name', e.target.value)}
+            error={!!formErrors.full_name}
+            helperText={formErrors.full_name}
+            disabled={loading}
+            sx={{ mt: 2 }}
+          />
+          <TextField
+            margin="dense"
+            label="Email"
+            type="email"
+            fullWidth
+            variant="outlined"
+            value={profileData.email}
+            onChange={(e) => handleProfileChange('email', e.target.value)}
+            error={!!formErrors.email}
+            helperText={formErrors.email}
+            disabled={loading}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeProfileDialog} disabled={loading}>
+            Отмена
+          </Button>
+          <Button 
+            onClick={handleProfileUpdate} 
+            variant="contained" 
+            disabled={loading}
+          >
+            {loading ? <CircularProgress size={24} /> : 'Сохранить'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={logoutDialogOpen} onClose={cancelLogout}>
+        <DialogTitle>Подтверждение выхода</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Вы уверены, что хотите выйти из системы?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={cancelLogout} variant="contained">
+            Отмена
+          </Button>
+          <Button 
+            onClick={confirmLogout} 
+            color="error" 
+            variant="contained"
+          >
+            Выйти
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
