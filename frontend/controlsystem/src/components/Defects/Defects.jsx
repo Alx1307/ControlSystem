@@ -22,14 +22,16 @@ import {
   FormControl,
   InputLabel,
   Select,
-  Chip
+  Chip,
+  Tooltip 
 } from '@mui/material';
 import { 
   Add as AddIcon, 
   Delete as DeleteIcon, 
   Edit as EditIcon,
   Engineering as AssignIcon,
-  Checklist as UpdateStatusIcon
+  Checklist as UpdateStatusIcon,
+  Warning as WarningIcon
 } from '@mui/icons-material';
 import { defectsAPI, usersAPI, historyAPI, objectsAPI } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
@@ -79,6 +81,35 @@ const Defects = () => {
     { id: 2, name: 'Средний', color: 'warning' },
     { id: 3, name: 'Высокий', color: 'error' }
   ];
+
+  const isDefectOverdue = (defect) => {
+    if (!defect.due_date) return false;
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const dueDate = new Date(defect.due_date);
+    dueDate.setHours(0, 0, 0, 0);
+    
+    const completedStatuses = [4, 5];
+    
+    return dueDate < today && !completedStatuses.includes(defect.status_id);
+  };
+
+  const getOverdueDays = (dueDate) => {
+    if (!dueDate) return 0;
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const due = new Date(dueDate);
+    due.setHours(0, 0, 0, 0);
+    
+    const diffTime = today - due;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    return Math.max(0, diffDays);
+  };
 
   const getAvailableStatuses = (currentStatusId) => {
     if (isManager) {
@@ -412,17 +443,35 @@ const Defects = () => {
                 defects.map((defect) => {
                   const statusInfo = getStatusInfo(defect.status_id);
                   const priorityInfo = getPriorityInfo(defect.priority_id);
+                  const isOverdue = isDefectOverdue(defect);
+                  const overdueDays = getOverdueDays(defect.due_date);
                   
                   return (
-                    <TableRow key={defect.id} hover>
+                    <TableRow 
+                      key={defect.id} 
+                      hover
+                      sx={{
+                        backgroundColor: isOverdue ? 'rgba(255, 0, 0, 0.04)' : 'inherit',
+                        '&:hover': {
+                          backgroundColor: isOverdue ? 'rgba(255, 0, 0, 0.08)' : 'rgba(0, 0, 0, 0.04)'
+                        }
+                      }}
+                    >
                       <TableCell>
-                        <Button
-                          onClick={() => openDefectDetail(defect)}
-                          sx={{ textTransform: 'none', justifyContent: 'flex-start' }}
-                          color="primary"
-                        >
-                          {defect.title}
-                        </Button>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Button
+                            onClick={() => openDefectDetail(defect)}
+                            sx={{ textTransform: 'none', justifyContent: 'flex-start' }}
+                            color="primary"
+                          >
+                            {defect.title}
+                          </Button>
+                          {isOverdue && (
+                            <Tooltip title={`Просрочен на ${overdueDays} ${overdueDays === 1 ? 'день' : overdueDays < 5 ? 'дня' : 'дней'}`}>
+                              <WarningIcon color="error" fontSize="small" />
+                            </Tooltip>
+                          )}
+                        </Box>
                       </TableCell>
                       <TableCell>{defect.object?.name}</TableCell>
                       <TableCell>
@@ -442,11 +491,30 @@ const Defects = () => {
                       <TableCell>
                         {defect.assignee?.full_name || 'Не назначен'}
                       </TableCell>
-                      <TableCell>{formatDate(defect.due_date)}</TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography 
+                            sx={{ 
+                              color: isOverdue ? 'error.main' : 'inherit',
+                              fontWeight: isOverdue ? 'bold' : 'normal'
+                            }}
+                          >
+                            {formatDate(defect.due_date)}
+                          </Typography>
+                          {isOverdue && (
+                            <Chip 
+                              label={`+${overdueDays}`} 
+                              color="error" 
+                              size="small" 
+                              variant="outlined"
+                            />
+                          )}
+                        </Box>
+                      </TableCell>
                       <TableCell align="center">
                         {canChangeStatus(defect) && (
                           <IconButton
-                            color="secondary"
+                            color="success"
                             onClick={() => openStatusDialog(defect)}
                             title="Изменить статус"
                           >

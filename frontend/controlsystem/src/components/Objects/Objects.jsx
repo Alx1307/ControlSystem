@@ -437,6 +437,13 @@ const Objects = () => {
                 placeholder="Поиск по адресу..."
                 value={searchParams.address}
                 onChange={(e) => handleSearchChange('address', e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon />
+                    </InputAdornment>
+                  ),
+                }}
               />
             </Grid>
             <Grid item xs={12} md={3}>
@@ -477,24 +484,24 @@ const Objects = () => {
             <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
               <Grid container spacing={2}>
                 <Grid item xs={12} md={3}>
-                <FormControl fullWidth>
-                  <InputLabel shrink={true}>Статус</InputLabel>
-                  <Select
-                    value={searchParams.status || ''}
-                    onChange={(e) => handleFilterChange('status', e.target.value)}
-                    label="Статус"
-                    displayEmpty
-                  >
-                    <MenuItem value="">
-                      <em>Все статусы</em>
-                    </MenuItem>
-                    {statusOptions.filter(option => option.value !== '').map(option => (
-                      <MenuItem key={option.value} value={option.value}>
-                        {option.label}
+                  <FormControl fullWidth>
+                    <InputLabel shrink={true}>Статус</InputLabel>
+                    <Select
+                      value={searchParams.status || ''}
+                      onChange={(e) => handleFilterChange('status', e.target.value)}
+                      label="Статус"
+                      displayEmpty
+                    >
+                      <MenuItem value="">
+                        <em>Все статусы</em>
                       </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                      {statusOptions.filter(option => option.value !== '').map(option => (
+                        <MenuItem key={option.value} value={option.value}>
+                          {option.label}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
                 </Grid>
                 <Grid item xs={12} md={3}>
                   <TextField

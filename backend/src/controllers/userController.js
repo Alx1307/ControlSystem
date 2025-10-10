@@ -3,6 +3,7 @@ const database = require('../config/database');
 const sequelize = database.sequelize;
 const jwt = require('jsonwebtoken');
 const { User, Role } = require('../models');
+const { Op } = require('sequelize');
 
 class UserController {
     constructor(UserModel) {
@@ -428,7 +429,104 @@ class UserController {
                 error: error.message
             });
         }
-    }    
+    }
+
+    async searchUsers(req, res) {
+        try {
+            const currentUser = req.user;
+            const { search, role, sortBy, sortOrder, page, limit } = req.query;
+    
+            if (!currentUser.role || currentUser.role !== 'Менеджер') {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Доступ запрещен. Только менеджеры могут просматривать информацию обо всех пользователях'
+                });
+            }
+    
+            let whereClause = {};
+            let orderClause = [];
+    
+            if (search) {
+                whereClause = {
+                    [Op.or]: [
+                        { full_name: { [Op.iLike]: `%${search}%` } },
+                        { email: { [Op.iLike]: `%${search}%` } }
+                    ]
+                };
+            }
+    
+            if (role && role !== '') {
+                whereClause = {
+                    ...whereClause,
+                    '$role.name$': role
+                };
+            }
+    
+            if (sortBy === 'name') {
+                orderClause = [
+                    ['full_name', sortOrder || 'ASC']
+                ];
+            } else if (sortBy === 'email') {
+                orderClause = [
+                    ['email', sortOrder || 'ASC']
+                ];
+            } else if (sortBy === 'role') {
+                orderClause = [
+                    [{ model: Role, as: 'role' }, 'name', sortOrder || 'ASC']
+                ];
+            } else {
+                orderClause = [['id', 'ASC']];
+            }
+    
+            const pageNumber = parseInt(page) || 1;
+            const pageSize = parseInt(limit) || 10;
+            const offset = (pageNumber - 1) * pageSize;
+    
+            const { count, rows: users } = await User.findAndCountAll({
+                where: whereClause,
+                include: [{ 
+                    model: Role, 
+                    as: 'role',
+                    attributes: ['name']
+                }],
+                attributes: { exclude: ['password'] },
+                order: orderClause,
+                limit: pageSize,
+                offset: offset,
+                distinct: true
+            });
+    
+            const total = count;
+            const totalPages = Math.ceil(total / pageSize);
+    
+            res.status(200).json({
+                success: true,
+                message: 'Список пользователей успешно получен',
+                total: total,
+                pagination: {
+                    page: pageNumber,
+                    limit: pageSize,
+                    totalPages: totalPages,
+                    total: total
+                },
+                users: users.map(user => ({
+                    id: user.id,
+                    full_name: user.full_name,
+                    email: user.email,
+                    role: user.role ? user.role.name : 'Не указана',
+                    created_at: user.created_at
+                }))
+            });
+    
+        } catch (error) {
+            console.error('Ошибка поиска пользователей:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Ошибка при поиске пользователей',
+                error: error.message
+            });
+        }
+    }
 }
 
 module.exports = UserController;

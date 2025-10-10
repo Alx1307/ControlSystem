@@ -7,7 +7,6 @@ import {
   Grid,
   Chip,
   Button,
-  IconButton,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -20,13 +19,17 @@ import {
   FormControl,
   InputLabel,
   Select,
-  MenuItem
+  MenuItem,
+  Tooltip
 } from '@mui/material';
 import {
   ArrowBack as BackIcon,
   History as HistoryIcon,
   Edit as EditIcon,
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  Warning as WarningIcon,
+  Engineering as AssignIcon,
+  Checklist as UpdateStatusIcon
 } from '@mui/icons-material';
 import { defectsAPI, historyAPI, objectsAPI, usersAPI  } from '../../services/api';
 
@@ -36,12 +39,15 @@ const DefectDetail = () => {
   const location = useLocation();
   const [defect, setDefect] = useState(null);
   const [objects, setObjects] = useState([]);
+  const [engineers, setEngineers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [defectHistory, setDefectHistory] = useState([]);
   const [users, setUsers] = useState([]);
   const [formData, setFormData] = useState({
@@ -52,6 +58,8 @@ const DefectDetail = () => {
     due_date: ''
   });
   const [formErrors, setFormErrors] = useState({});
+  const [selectedEngineer, setSelectedEngineer] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('');
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isManager = user.role === 'Менеджер';
@@ -71,10 +79,61 @@ const DefectDetail = () => {
     { id: 3, name: 'Высокий', color: 'error' }
   ];
 
+  const isDefectOverdue = (defect) => {
+    if (!defect || !defect.due_date) return false;
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const dueDate = new Date(defect.due_date);
+    dueDate.setHours(0, 0, 0, 0);
+    
+    const completedStatuses = [4, 5];
+    
+    return dueDate < today && !completedStatuses.includes(defect.status_id);
+  };
+
+  const getOverdueDays = (dueDate) => {
+    if (!dueDate) return 0;
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const due = new Date(dueDate);
+    due.setHours(0, 0, 0, 0);
+    
+    const diffTime = today - due;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    return Math.max(0, diffDays);
+  };
+
+  const getAvailableStatuses = (currentStatusId) => {
+    if (isManager) {
+      return defectStatuses.filter(status => [4, 5].includes(status.id));
+    } else if (isEngineer) {
+      return defectStatuses.filter(status => [2, 3].includes(status.id));
+    }
+    return [];
+  };
+
+  const canAssignDefect = (defect) => {
+    return isManager;
+  };
+
+  const canChangeStatus = (defect) => {
+    if (isManager) return true;
+    if (isEngineer && defect.assignee_id === user.id) return true;
+    return false;
+  };
+
   useEffect(() => {
     loadDefect();
     loadObjects();
     loadUsers();
+    if (isManager) {
+      loadEngineers();
+    }
   }, [defectId]);
 
   const loadDefect = async () => {
@@ -112,6 +171,18 @@ const DefectDetail = () => {
       }
     } catch (error) {
       console.error('Error loading users:', error);
+    }
+  };
+
+  const loadEngineers = async () => {
+    try {
+      const response = await usersAPI.getAllUsers();
+      if (response.data.success) {
+        const engineers = response.data.users.filter(u => u.role === 'Инженер');
+        setEngineers(engineers);
+      }
+    } catch (error) {
+      console.error('Error loading engineers:', error);
     }
   };
 
@@ -173,6 +244,46 @@ const DefectDetail = () => {
     }
   };
 
+  const handleAssignDefect = async () => {
+    if (!defect || !selectedEngineer) return;
+
+    setLoading(true);
+    try {
+      const response = await defectsAPI.assignDefect(defectId, selectedEngineer);
+      if (response.data.success) {
+        setSuccess('Инженер успешно назначен');
+        setAssignDialogOpen(false);
+        setSelectedEngineer('');
+        loadDefect();
+      }
+    } catch (error) {
+      console.error('Error assigning defect:', error);
+      setError(error.response?.data?.message || 'Ошибка при назначении инженера');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateStatus = async () => {
+    if (!defect || !selectedStatus) return;
+
+    setLoading(true);
+    try {
+      const response = await defectsAPI.updateDefectStatus(defectId, selectedStatus);
+      if (response.data.success) {
+        setSuccess('Статус дефекта успешно обновлен');
+        setStatusDialogOpen(false);
+        setSelectedStatus('');
+        loadDefect();
+      }
+    } catch (error) {
+      console.error('Error updating defect status:', error);
+      setError(error.response?.data?.message || 'Ошибка при обновлении статуса');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const openEditDialog = () => {
     if (!defect) return;
     
@@ -185,6 +296,20 @@ const DefectDetail = () => {
     });
     setFormErrors({});
     setEditDialogOpen(true);
+  };
+
+  const openAssignDialog = () => {
+    if (!defect) return;
+    
+    setSelectedEngineer(defect.assignee_id || '');
+    setAssignDialogOpen(true);
+  };
+
+  const openStatusDialog = () => {
+    if (!defect) return;
+    
+    setSelectedStatus(defect.status_id?.toString() || '');
+    setStatusDialogOpen(true);
   };
 
   const openHistoryDialog = async () => {
@@ -207,6 +332,16 @@ const DefectDetail = () => {
   const closeEditDialog = () => {
     setEditDialogOpen(false);
     setFormErrors({});
+  };
+
+  const closeAssignDialog = () => {
+    setAssignDialogOpen(false);
+    setSelectedEngineer('');
+  };
+
+  const closeStatusDialog = () => {
+    setStatusDialogOpen(false);
+    setSelectedStatus('');
   };
 
   const handleFormChange = (field, value) => {
@@ -337,6 +472,8 @@ const DefectDetail = () => {
 
   const statusInfo = getStatusInfo(defect.status_id);
   const priorityInfo = getPriorityInfo(defect.priority_id);
+  const isOverdue = isDefectOverdue(defect);
+  const overdueDays = getOverdueDays(defect.due_date);
 
   return (
     <Box>
@@ -354,27 +491,41 @@ const DefectDetail = () => {
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
         <Box>
-          <Typography variant="h4" component="h1" gutterBottom>
-            {defect.title}
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <Typography variant="h4" component="h1">
+              {defect.title}
+            </Typography>
+            {isOverdue && (
+              <Tooltip title={`Просрочен на ${overdueDays} ${overdueDays === 1 ? 'день' : overdueDays < 5 ? 'дня' : 'дней'}`}>
+                <WarningIcon color="error" />
+              </Tooltip>
+            )}
+          </Box>
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
             <Chip label={statusInfo.name} color={statusInfo.color} />
             <Chip label={priorityInfo.name} color={priorityInfo.color} />
+            {isOverdue && (
+              <Chip 
+                label={`Просрочен на ${overdueDays} ${overdueDays === 1 ? 'день' : overdueDays < 5 ? 'дня' : 'дней'}`} 
+                color="error" 
+                variant="outlined"
+              />
+            )}
           </Box>
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
-        <Button
-          startIcon={<BackIcon />}
-          onClick={() => {
-            if (location.state?.fromObject && location.state?.objectId) {
-              navigate(`/objects/${location.state.objectId}`);
-            } else {
-              navigate('/defects');
-            }
-          }}
-        >
-          Назад
-        </Button>
+          <Button
+            startIcon={<BackIcon />}
+            onClick={() => {
+              if (location.state?.fromObject && location.state?.objectId) {
+                navigate(`/objects/${location.state.objectId}`);
+              } else {
+                navigate('/defects');
+              }
+            }}
+          >
+            Назад
+          </Button>
         </Box>
       </Box>
 
@@ -444,22 +595,6 @@ const DefectDetail = () => {
                   {formatDate(defect.due_date)}
                 </Typography>
               </Grid>
-              <Grid item xs={12} sm={6}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  Дата создания
-                </Typography>
-                <Typography variant="body1">
-                  {new Date(defect.createdAt).toLocaleDateString('ru-RU')}
-                </Typography>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  Последнее обновление
-                </Typography>
-                <Typography variant="body1">
-                  {new Date(defect.updatedAt).toLocaleDateString('ru-RU')}
-                </Typography>
-              </Grid>
             </Grid>
           </Paper>
         </Grid>
@@ -479,6 +614,29 @@ const DefectDetail = () => {
                   >
                     История изменений
                   </Button>
+
+                  {canChangeStatus(defect) && (
+                    <Button
+                      startIcon={<UpdateStatusIcon />}
+                      onClick={openStatusDialog}
+                      variant="outlined"
+                      color="success"
+                    >
+                      Изменить статус
+                    </Button>
+                  )}
+                  
+                  {canAssignDefect(defect) && (
+                    <Button
+                      startIcon={<AssignIcon />}
+                      onClick={openAssignDialog}
+                      variant="outlined"
+                      color="info"
+                    >
+                      Назначить инженера
+                    </Button>
+                  )}
+
                   {isManager && (
                     <>
                       <Button
@@ -733,6 +891,82 @@ const DefectDetail = () => {
         <DialogActions>
           <Button onClick={closeHistoryDialog} variant="contained">
             Закрыть
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={assignDialogOpen} onClose={closeAssignDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Назначить инженера</DialogTitle>
+        <DialogContent>
+          <Typography gutterBottom>
+            Дефект: {defect?.title}
+          </Typography>
+          <FormControl fullWidth margin="dense">
+            <InputLabel>Инженер</InputLabel>
+            <Select
+              value={selectedEngineer}
+              onChange={(e) => setSelectedEngineer(e.target.value)}
+              disabled={loading}
+              label="Инженер"
+            >
+              <MenuItem value="">Не назначен</MenuItem>
+              {engineers.map((engineer) => (
+                <MenuItem key={engineer.id} value={engineer.id}>
+                  {engineer.full_name} ({engineer.email})
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeAssignDialog} disabled={loading}>
+            Отмена
+          </Button>
+          <Button 
+            onClick={handleAssignDefect} 
+            variant="contained" 
+            disabled={loading}
+          >
+            {loading ? <CircularProgress size={24} /> : 'Назначить'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={statusDialogOpen} onClose={closeStatusDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Изменить статус дефекта</DialogTitle>
+        <DialogContent>
+          <Typography gutterBottom>
+            Дефект: {defect?.title}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            Текущий статус: {getStatusInfo(defect?.status_id).name}
+          </Typography>
+          <FormControl fullWidth margin="dense">
+            <InputLabel>Новый статус</InputLabel>
+            <Select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              disabled={loading}
+              label="Новый статус"
+            >
+              {getAvailableStatuses(defect?.status_id).map((status) => (
+                <MenuItem key={status.id} value={status.id}>
+                  {status.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeStatusDialog} disabled={loading}>
+            Отмена
+          </Button>
+          <Button 
+            onClick={handleUpdateStatus} 
+            variant="contained" 
+            disabled={loading}
+          >
+            {loading ? <CircularProgress size={24} /> : 'Обновить'}
           </Button>
         </DialogActions>
       </Dialog>

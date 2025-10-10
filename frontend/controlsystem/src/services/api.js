@@ -58,6 +58,9 @@ export const usersAPI = {
 
   getEngineers: () => 
     api.get('/engineers'),
+
+  searchUsers: (params) =>
+    api.get('/search', { params }),
 };
 
 export const objectsAPI = {

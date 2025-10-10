@@ -18,9 +18,24 @@ import {
   TextField,
   MenuItem,
   Alert,
-  CircularProgress
+  CircularProgress,
+  Grid,
+  Chip,
+  FormControl,
+  InputLabel,
+  Select,
+  Card,
+  CardContent,
+  InputAdornment,
+  TablePagination 
 } from '@mui/material';
-import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { 
+  Add as AddIcon, 
+  Delete as DeleteIcon,
+  Search as SearchIcon,
+  FilterList as FilterIcon,
+  Sort as SortIcon
+} from '@mui/icons-material';
 import { usersAPI } from '../../services/api';
 
 const Employees = () => {
@@ -37,19 +52,59 @@ const Employees = () => {
   });
   const [formErrors, setFormErrors] = useState({});
 
+  const [searchParams, setSearchParams] = useState({
+    search: '',
+    role: '',
+    sortBy: 'name',
+    sortOrder: 'ASC'
+  });
+  const [pagination, setPagination] = useState({
+    page: 0,
+    limit: 10,
+    total: 0,
+    totalPages: 0
+  });
+  const [showFilters, setShowFilters] = useState(false);
+
   const roles = ['Менеджер', 'Инженер', 'Наблюдатель'];
+  
+  const sortOptions = [
+    { value: 'name:ASC', label: 'ФИО (А-Я)' },
+    { value: 'name:DESC', label: 'ФИО (Я-А)' },
+    { value: 'email:ASC', label: 'Email (А-Я)' },
+    { value: 'email:DESC', label: 'Email (Я-А)' },
+    { value: 'role:ASC', label: 'Роль (А-Я)' },
+    { value: 'role:DESC', label: 'Роль (Я-А)' }
+  ];
 
   useEffect(() => {
     loadUsers();
-  }, []);
+  }, [searchParams, pagination.page, pagination.limit]);
 
   const loadUsers = async () => {
     setLoading(true);
     setError('');
     try {
-      const response = await usersAPI.getAllUsers();
+      const params = {
+        ...searchParams,
+        page: pagination.page + 1,
+        limit: pagination.limit
+      };
+
+      Object.keys(params).forEach(key => {
+        if (params[key] === '' || params[key] === null) {
+          delete params[key];
+        }
+      });
+
+      const response = await usersAPI.searchUsers(params);
       if (response.data.success) {
-        setUsers(response.data.users);
+        setUsers(response.data.users || []);
+        setPagination(prev => ({
+          ...prev,
+          total: response.data.total,
+          totalPages: Math.ceil(response.data.total / pagination.limit)
+        }));
       }
     } catch (error) {
       console.error('Error loading users:', error);
@@ -57,6 +112,43 @@ const Employees = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSearchChange = (field, value) => {
+    setSearchParams(prev => ({ ...prev, [field]: value }));
+    setPagination(prev => ({ ...prev, page: 0 }));
+  };
+
+  const handleSortChange = (value) => {
+    const [sortBy, sortOrder] = value.split(':');
+    setSearchParams(prev => ({ ...prev, sortBy, sortOrder }));
+  };
+
+  const handleFilterChange = (field, value) => {
+    setSearchParams(prev => ({ ...prev, [field]: value }));
+    setPagination(prev => ({ ...prev, page: 0 }));
+  };
+
+  const clearFilters = () => {
+    setSearchParams({
+      search: '',
+      role: '',
+      sortBy: 'name',
+      sortOrder: 'ASC'
+    });
+    setPagination(prev => ({ ...prev, page: 0 }));
+  };
+
+  const handlePageChange = (event, newPage) => {
+    setPagination(prev => ({ ...prev, page: newPage }));
+  };
+
+  const handleRowsPerPageChange = (event) => {
+    setPagination(prev => ({
+      ...prev,
+      limit: parseInt(event.target.value, 10),
+      page: 0
+    }));
   };
 
   const handleAddUser = async () => {
@@ -136,6 +228,19 @@ const Employees = () => {
     }
   };
 
+  const hasActiveFilters = () => {
+    return searchParams.search || searchParams.role;
+  };
+
+  const getRoleColor = (role) => {
+    switch (role) {
+      case 'Менеджер': return 'primary';
+      case 'Инженер': return 'secondary';
+      case 'Наблюдатель': return 'default';
+      default: return 'default';
+    }
+  };
+
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -163,6 +268,99 @@ const Employees = () => {
         </Alert>
       )}
 
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                placeholder="Поиск по ФИО или email..."
+                value={searchParams.search}
+                onChange={(e) => handleSearchChange('search', e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <FormControl fullWidth>
+                <InputLabel>Сортировка</InputLabel>
+                <Select
+                  value={`${searchParams.sortBy}:${searchParams.sortOrder}`}
+                  onChange={(e) => handleSortChange(e.target.value)}
+                  label="Сортировка"
+                  startAdornment={
+                    <InputAdornment position="start">
+                      <SortIcon />
+                    </InputAdornment>
+                  }
+                >
+                  {sortOptions.map(option => (
+                    <MenuItem key={option.value} value={option.value}>
+                      {option.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Button
+                fullWidth
+                variant="outlined"
+                startIcon={<FilterIcon />}
+                onClick={() => setShowFilters(!showFilters)}
+                color={hasActiveFilters() ? "primary" : "inherit"}
+              >
+                Фильтры {hasActiveFilters() && '•'}
+              </Button>
+            </Grid>
+          </Grid>
+
+          {showFilters && (
+            <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} md={6}>
+                <FormControl fullWidth>
+                  <InputLabel shrink={true}>Роль</InputLabel>
+                  <Select
+                    value={searchParams.role || ''}
+                    onChange={(e) => handleFilterChange('role', e.target.value)}
+                    label="Роль"
+                    displayEmpty
+                  >
+                    <MenuItem value="">
+                      <em>Все роли</em>
+                    </MenuItem>
+                    {roles.map(role => (
+                      <MenuItem key={role} value={role}>
+                        {role}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    color="secondary"
+                    onClick={clearFilters}
+                    disabled={!hasActiveFilters()}
+                    sx={{ height: '56px' }}
+                  >
+                    Сбросить фильтры
+                  </Button>
+                </Grid>
+              </Grid>
+            </Box>
+          )}
+        </CardContent>
+      </Card>
+
       <Paper>
         <TableContainer>
           <Table>
@@ -184,22 +382,38 @@ const Employees = () => {
               ) : users.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={4} align="center">
-                    Нет данных о сотрудниках
+                    {hasActiveFilters() ? 'Нет сотрудников, соответствующих фильтрам' : 'Нет данных о сотрудниках'}
                   </TableCell>
                 </TableRow>
               ) : (
                 users.map((user) => (
-                  <TableRow key={user.id}>
+                  <TableRow key={user.id} hover>
                     <TableCell>
-                      {user.full_name || 'Не завершил регистрацию'}
+                      <Typography 
+                        variant="body1" 
+                        sx={{
+                          fontWeight: user.full_name ? 500 : 400,
+                          color: user.full_name ? 'text.primary' : 'text.secondary'
+                        }}
+                      >
+                        {user.full_name || 'Не завершил регистрацию'}
+                      </Typography>
                     </TableCell>
                     <TableCell>{user.email}</TableCell>
-                    <TableCell>{user.role}</TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={user.role} 
+                        color={getRoleColor(user.role)}
+                        size="small" 
+                        variant="outlined"
+                      />
+                    </TableCell>
                     <TableCell align="center">
                       <IconButton
                         color="error"
                         onClick={() => openDeleteDialog(user)}
                         disabled={loading}
+                        title="Удалить сотрудника"
                       >
                         <DeleteIcon />
                       </IconButton>
@@ -210,6 +424,20 @@ const Employees = () => {
             </TableBody>
           </Table>
         </TableContainer>
+        
+        <TablePagination
+          rowsPerPageOptions={[5, 10, 25, 50]}
+          component="div"
+          count={pagination.total}
+          rowsPerPage={pagination.limit}
+          page={pagination.page}
+          onPageChange={handlePageChange}
+          onRowsPerPageChange={handleRowsPerPageChange}
+          labelRowsPerPage="Строк на странице:"
+          labelDisplayedRows={({ from, to, count }) => 
+            `${from}-${to} из ${count !== -1 ? count : `более ${to}`}`
+          }
+        />
       </Paper>
 
       <Dialog open={addDialogOpen} onClose={closeAddDialog} maxWidth="sm" fullWidth>
@@ -270,6 +498,11 @@ const Employees = () => {
           {selectedUser?.full_name && (
             <Typography variant="body2" color="text.secondary">
               ФИО: {selectedUser.full_name}
+            </Typography>
+          )}
+          {selectedUser?.role && (
+            <Typography variant="body2" color="text.secondary">
+              Роль: {selectedUser.role}
             </Typography>
           )}
         </DialogContent>
