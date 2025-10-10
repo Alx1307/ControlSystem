@@ -212,32 +212,110 @@ class ObjectsController {
 
     async searchObjects(req, res) {
         try {
-            const { name, address, start_date, end_date } = req.query;
+            const { 
+                name, 
+                address, 
+                start_date, 
+                end_date,
+                status,
+                sortBy = 'name',
+                sortOrder = 'ASC',
+                page = 1,
+                limit = 10
+            } = req.query;
+            
             const where = {};
+            const order = [];
     
-            if (name) where.name = { [Op.iLike]: `%${name}%` };
-            if (address) where.address = { [Op.iLike]: `%${address}%` };
-            if (start_date) where.start_date = { [Op.gte]: new Date(start_date) };
-            if (end_date) where.end_date = { [Op.lte]: new Date(end_date) };
-
-            console.log('Where condition:', where);
+            if (name && name.trim() !== '') where.name = { [Op.iLike]: `%${name.trim()}%` };
+            if (address && address.trim() !== '') where.address = { [Op.iLike]: `%${address.trim()}%` };
+            
+            if (start_date && start_date.trim() !== '') {
+                const startDate = new Date(start_date);
+                if (!isNaN(startDate)) where.start_date = { [Op.gte]: startDate };
+            }
+            
+            if (end_date && end_date.trim() !== '') {
+                const endDate = new Date(end_date);
+                if (!isNaN(endDate)) where.end_date = { [Op.lte]: endDate };
+            }
     
-            const objects = await this.Objects.findAll({
-                where: where,
-                attributes: ['id', 'name', 'description', 'address', 'start_date', 'end_date']
+            if (status && status.trim() !== '') {
+                const statusConditions = this.getStatusConditions(status);
+                if (statusConditions) {
+                    Object.assign(where, statusConditions);
+                }
+            }
+    
+            const allowedSortFields = ['name', 'address', 'start_date', 'end_date'];
+            const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'name';
+            const sortDir = sortOrder.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+            order.push([sortField, sortDir]);
+    
+            console.log('Search params:', req.query);
+            console.log('Where condition:', JSON.stringify(where, null, 2));
+            console.log('Order:', order);
+    
+            const pageNum = parseInt(page) || 1;
+            const limitNum = parseInt(limit) || 10;
+            const offset = (pageNum - 1) * limitNum;
+    
+            const { count, rows: objects } = await this.Objects.findAndCountAll({
+                where: Object.keys(where).length > 0 ? where : undefined,
+                attributes: ['id', 'name', 'description', 'address', 'start_date', 'end_date'],
+                order: order,
+                limit: limitNum,
+                offset: offset
             });
     
             res.status(200).json({
                 success: true,
-                objects
+                objects,
+                pagination: {
+                    total: count,
+                    page: pageNum,
+                    limit: limitNum,
+                    totalPages: Math.ceil(count / limitNum)
+                }
             });
         } catch (error) {
             console.error('Ошибка при поиске объектов:', error);
             res.status(500).json({
                 success: false,
                 message: 'Ошибка сервера при поиске объектов.',
-                error: error.message
+                error: error.message,
+                stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
             });
+        }
+    }
+    
+    getStatusConditions(status) {
+        const now = new Date();
+        
+        switch(status) {
+            case 'not_started':
+                return { start_date: { [Op.is]: null } };
+                
+            case 'planned':
+                return { start_date: { [Op.gt]: now } };
+                
+            case 'in_progress':
+                return {
+                    start_date: { [Op.lte]: now },
+                    end_date: { 
+                        [Op.or]: [
+                            { [Op.gte]: now }, 
+                            { [Op.is]: null }
+                        ] 
+                    }
+                };
+                
+            case 'completed':
+                return { end_date: { [Op.lt]: now } };
+                
+            default:
+                console.log('Unknown status filter:', status);
+                return null;
         }
     }
 

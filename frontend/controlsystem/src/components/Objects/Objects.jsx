@@ -23,13 +23,20 @@ import {
   FormControl,
   InputLabel,
   Select,
-  MenuItem
+  MenuItem,
+  Card,
+  CardContent,
+  InputAdornment,
+  TablePagination 
 } from '@mui/material';
 import { 
   Add as AddIcon, 
   Delete as DeleteIcon, 
   Edit as EditIcon,
-  Build as DefectIcon 
+  Build as DefectIcon,
+  Search as SearchIcon,
+  FilterList as FilterIcon,
+  Sort as SortIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { objectsAPI, defectsAPI } from '../../services/api';
@@ -63,6 +70,22 @@ const Objects = () => {
     due_date: ''
   });
   const [defectFormErrors, setDefectFormErrors] = useState({});
+  const [searchParams, setSearchParams] = useState({
+    name: '',
+    address: '',
+    start_date: '',
+    end_date: '',
+    status: '',
+    sortBy: 'name',
+    sortOrder: 'ASC'
+  });
+  const [pagination, setPagination] = useState({
+    page: 0,
+    limit: 10,
+    total: 0,
+    totalPages: 0
+  });
+  const [showFilters, setShowFilters] = useState(false);
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isManager = user.role === 'Менеджер';
@@ -73,17 +96,53 @@ const Objects = () => {
     { id: 3, name: 'Высокий', color: 'error' }
   ];
 
+  const statusOptions = [
+    { value: '', label: 'Все статусы' },
+    { value: 'not_started', label: 'Не начат' },
+    { value: 'planned', label: 'Запланирован' },
+    { value: 'in_progress', label: 'В работе' },
+    { value: 'completed', label: 'Завершен' }
+  ];
+
+  const sortOptions = [
+    { value: 'name:ASC', label: 'Название (А-Я)' },
+    { value: 'name:DESC', label: 'Название (Я-А)' },
+    { value: 'address:ASC', label: 'Адрес (А-Я)' },
+    { value: 'address:DESC', label: 'Адрес (Я-А)' },
+    { value: 'start_date:ASC', label: 'Дата начала (сначала старые)' },
+    { value: 'start_date:DESC', label: 'Дата начала (сначала новые)' },
+    { value: 'end_date:ASC', label: 'Дата окончания (сначала старые)' },
+    { value: 'end_date:DESC', label: 'Дата окончания (сначала новые)' }
+  ];
+
   useEffect(() => {
     loadObjects();
-  }, []);
+  }, [searchParams, pagination.page, pagination.limit]);
 
   const loadObjects = async () => {
     setLoading(true);
     setError('');
     try {
-      const response = await objectsAPI.getAllObjects();
+      const params = {
+        ...searchParams,
+        page: pagination.page + 1,
+        limit: pagination.limit
+      };
+
+      Object.keys(params).forEach(key => {
+        if (params[key] === '' || params[key] === null) {
+          delete params[key];
+        }
+      });
+
+      const response = await objectsAPI.searchObjects(params);
       if (response.data.success) {
         setObjects(response.data.objects || []);
+        setPagination(prev => ({
+          ...prev,
+          total: response.data.pagination.total,
+          totalPages: response.data.pagination.totalPages
+        }));
       }
     } catch (error) {
       console.error('Error loading objects:', error);
@@ -91,6 +150,46 @@ const Objects = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSearchChange = (field, value) => {
+    setSearchParams(prev => ({ ...prev, [field]: value }));
+    setPagination(prev => ({ ...prev, page: 0 }));
+  };
+
+  const handleSortChange = (value) => {
+    const [sortBy, sortOrder] = value.split(':');
+    setSearchParams(prev => ({ ...prev, sortBy, sortOrder }));
+  };
+
+  const handleFilterChange = (field, value) => {
+    setSearchParams(prev => ({ ...prev, [field]: value }));
+    setPagination(prev => ({ ...prev, page: 0 }));
+  };
+
+  const clearFilters = () => {
+    setSearchParams({
+      name: '',
+      address: '',
+      start_date: '',
+      end_date: '',
+      status: '',
+      sortBy: 'name',
+      sortOrder: 'ASC'
+    });
+    setPagination(prev => ({ ...prev, page: 0 }));
+  };
+
+  const handlePageChange = (event, newPage) => {
+    setPagination(prev => ({ ...prev, page: newPage }));
+  };
+
+  const handleRowsPerPageChange = (event) => {
+    setPagination(prev => ({
+      ...prev,
+      limit: parseInt(event.target.value, 10),
+      page: 0
+    }));
   };
 
   const handleAddDefect = async () => {
@@ -225,16 +324,6 @@ const Objects = () => {
     setAddDialogOpen(true);
   };
 
-  const openAddDefect = (object) => {
-    navigate('/defects', { 
-      state: { 
-        fromObject: true, 
-        objectId: object.id,
-        objectName: object.name 
-      } 
-    });
-  };
-
   const openEditDialog = (object) => {
     setSelectedObject(object);
     setFormData({
@@ -291,6 +380,10 @@ const Objects = () => {
     return { label: 'В работе', color: 'primary' };
   };
 
+  const hasActiveFilters = () => {
+    return searchParams.name || searchParams.address || searchParams.start_date || searchParams.end_date || searchParams.status;
+  };
+
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -320,6 +413,127 @@ const Objects = () => {
         </Alert>
       )}
 
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} md={3}>
+              <TextField
+                fullWidth
+                placeholder="Поиск по названию..."
+                value={searchParams.name}
+                onChange={(e) => handleSearchChange('name', e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} md={3}>
+              <TextField
+                fullWidth
+                placeholder="Поиск по адресу..."
+                value={searchParams.address}
+                onChange={(e) => handleSearchChange('address', e.target.value)}
+              />
+            </Grid>
+            <Grid item xs={12} md={3}>
+              <FormControl fullWidth>
+                <InputLabel>Сортировка</InputLabel>
+                <Select
+                  value={`${searchParams.sortBy}:${searchParams.sortOrder}`}
+                  onChange={(e) => handleSortChange(e.target.value)}
+                  label="Сортировка"
+                  startAdornment={
+                    <InputAdornment position="start">
+                      <SortIcon />
+                    </InputAdornment>
+                  }
+                >
+                  {sortOptions.map(option => (
+                    <MenuItem key={option.value} value={option.value}>
+                      {option.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={3}>
+              <Button
+                fullWidth
+                variant="outlined"
+                startIcon={<FilterIcon />}
+                onClick={() => setShowFilters(!showFilters)}
+                color={hasActiveFilters() ? "primary" : "inherit"}
+              >
+                Фильтры {hasActiveFilters() && '•'}
+              </Button>
+            </Grid>
+          </Grid>
+
+          {showFilters && (
+            <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={3}>
+                <FormControl fullWidth>
+                  <InputLabel shrink={true}>Статус</InputLabel>
+                  <Select
+                    value={searchParams.status || ''}
+                    onChange={(e) => handleFilterChange('status', e.target.value)}
+                    label="Статус"
+                    displayEmpty
+                  >
+                    <MenuItem value="">
+                      <em>Все статусы</em>
+                    </MenuItem>
+                    {statusOptions.filter(option => option.value !== '').map(option => (
+                      <MenuItem key={option.value} value={option.value}>
+                        {option.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <TextField
+                    fullWidth
+                    label="Дата начала от"
+                    type="date"
+                    value={searchParams.start_date}
+                    onChange={(e) => handleFilterChange('start_date', e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                  />
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <TextField
+                    fullWidth
+                    label="Дата окончания до"
+                    type="date"
+                    value={searchParams.end_date}
+                    onChange={(e) => handleFilterChange('end_date', e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                  />
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    color="secondary"
+                    onClick={clearFilters}
+                    disabled={!hasActiveFilters()}
+                    sx={{ height: '56px' }}
+                  >
+                    Сбросить фильтры
+                  </Button>
+                </Grid>
+              </Grid>
+            </Box>
+          )}
+        </CardContent>
+      </Card>
+
       <Paper>
         <TableContainer>
           <Table>
@@ -343,7 +557,7 @@ const Objects = () => {
               ) : objects.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} align="center">
-                    Нет данных об объектах
+                    {hasActiveFilters() ? 'Нет объектов, соответствующих фильтрам' : 'Нет данных об объектах'}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -422,6 +636,20 @@ const Objects = () => {
             </TableBody>
           </Table>
         </TableContainer>
+        
+        <TablePagination
+          rowsPerPageOptions={[5, 10, 25, 50]}
+          component="div"
+          count={pagination.total}
+          rowsPerPage={pagination.limit}
+          page={pagination.page}
+          onPageChange={handlePageChange}
+          onRowsPerPageChange={handleRowsPerPageChange}
+          labelRowsPerPage="Строк на странице:"
+          labelDisplayedRows={({ from, to, count }) => 
+            `${from}-${to} из ${count !== -1 ? count : `более ${to}`}`
+          }
+        />
       </Paper>
 
       <Dialog open={addDialogOpen} onClose={closeAllDialogs} maxWidth="md" fullWidth>
