@@ -1,6 +1,7 @@
 const database = require('../config/database');
 const sequelize = database.sequelize;
 const Objects = require('../models/Objects');
+const Defect = require('../models/Defect');
 const { Op } = require('sequelize');
 
 class ObjectsController {
@@ -238,7 +239,48 @@ class ObjectsController {
                 error: error.message
             });
         }
-    } 
+    }
+
+    async getObjectDefects(req, res) {
+        try {
+            const { objectId } = req.params;
+            const { page = 1, limit = 10, sortBy = 'id', sortOrder = 'ASC' } = req.query;
+    
+            const object = await this.Objects.findByPk(objectId);
+            if (!object) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Объект не найден.'
+                });
+            }
+    
+            const offset = (page - 1) * limit;
+            const order = [[sortBy, sortOrder]];
+    
+            const { count, rows: defects } = await Defect.findAndCountAll({
+                where: { object_id: objectId },
+                order,
+                limit,
+                offset
+            });
+    
+            res.status(200).json({
+                success: true,
+                total: count,
+                pages: Math.ceil(count / limit),
+                currentPage: parseInt(page),
+                defects
+            });
+    
+        } catch (error) {
+            console.error('Ошибка при получении списка дефектов:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Ошибка сервера при получении списка дефектов.',
+                error: error.message
+            });
+        }
+    }    
 }
 
 module.exports = ObjectsController;

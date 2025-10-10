@@ -7,7 +7,7 @@ import {
   CircularProgress
 } from '@mui/material';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { authAPI } from '../../services/api';
+import { usersAPI } from '../../services/api';
 import { validateLoginForm } from '../../utils/validation';
 import AuthForm from './AuthForm';
 
@@ -60,7 +60,7 @@ const Login = () => {
     setServerError('');
 
     try {
-      const response = await authAPI.login(formData.email, formData.password);
+      const response = await usersAPI.login(formData.email, formData.password);
 
       if (response.data.success) {
         const { token, user } = response.data;

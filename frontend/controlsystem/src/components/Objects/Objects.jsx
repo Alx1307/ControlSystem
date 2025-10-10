@@ -30,9 +30,12 @@ import {
   Visibility as ViewIcon,
   History as HistoryIcon
 } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import { objectsAPI, historyAPI } from '../../services/api';
 
 const Objects = () => {
+  const navigate = useNavigate();
+  
   const [objects, setObjects] = useState([]);
   const [selectedObject, setSelectedObject] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -41,7 +44,6 @@ const Objects = () => {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [objectHistory, setObjectHistory] = useState([]);
   const [formData, setFormData] = useState({
@@ -188,9 +190,8 @@ const Objects = () => {
     setDeleteDialogOpen(true);
   };
 
-  const openViewDialog = (object) => {
-    setSelectedObject(object);
-    setViewDialogOpen(true);
+  const openObjectDetail = (object) => {
+    navigate(`/objects/${object.id}`);
   };
 
   const openHistoryDialog = async (object) => {
@@ -203,7 +204,6 @@ const Objects = () => {
     setAddDialogOpen(false);
     setEditDialogOpen(false);
     setDeleteDialogOpen(false);
-    setViewDialogOpen(false);
     setHistoryDialogOpen(false);
     setFormData({ name: '', description: '', address: '', start_date: '', end_date: '' });
     setFormErrors({});
@@ -293,7 +293,15 @@ const Objects = () => {
                   const status = getStatus(object);
                   return (
                     <TableRow key={object.id} hover>
-                      <TableCell>{object.name}</TableCell>
+                      <TableCell>
+                        <Button
+                          onClick={() => openObjectDetail(object)}
+                          sx={{ textTransform: 'none', justifyContent: 'flex-start' }}
+                          color="primary"
+                        >
+                          {object.name}
+                        </Button>
+                      </TableCell>
                       <TableCell>{object.address}</TableCell>
                       <TableCell>
                         <Chip 
@@ -305,13 +313,6 @@ const Objects = () => {
                       <TableCell>{formatDate(object.start_date)}</TableCell>
                       <TableCell>{formatDate(object.end_date)}</TableCell>
                       <TableCell align="center">
-                        <IconButton
-                          color="primary"
-                          onClick={() => openViewDialog(object)}
-                          title="Просмотреть"
-                        >
-                          <ViewIcon />
-                        </IconButton>
                         <IconButton
                           color="info"
                           onClick={() => openHistoryDialog(object)}
@@ -527,59 +528,6 @@ const Objects = () => {
             disabled={loading}
           >
             {loading ? <CircularProgress size={24} /> : 'Удалить'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={viewDialogOpen} onClose={closeAllDialogs} maxWidth="md" fullWidth>
-        <DialogTitle>Информация об объекте</DialogTitle>
-        <DialogContent>
-          {selectedObject && (
-            <Box>
-              <Typography variant="h6" gutterBottom>
-                {selectedObject.name}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" paragraph>
-                {selectedObject.description || 'Описание отсутствует'}
-              </Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={12}>
-                  <Typography variant="subtitle2">Адрес:</Typography>
-                  <Typography variant="body1">{selectedObject.address}</Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="subtitle2">Дата начала:</Typography>
-                  <Typography variant="body1">{formatDate(selectedObject.start_date)}</Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="subtitle2">Дата окончания:</Typography>
-                  <Typography variant="body1">{formatDate(selectedObject.end_date)}</Typography>
-                </Grid>
-                <Grid item xs={12}>
-                  <Typography variant="subtitle2">Статус:</Typography>
-                  <Chip 
-                    label={getStatus(selectedObject).label} 
-                    color={getStatus(selectedObject).color} 
-                  />
-                </Grid>
-              </Grid>
-              
-              <Box sx={{ mt: 3 }}>
-                <Typography variant="h6" gutterBottom>
-                  Дефекты объекта
-                </Typography>
-                <Paper sx={{ p: 2 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Список дефектов будет отображаться здесь
-                  </Typography>
-                </Paper>
-              </Box>
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeAllDialogs} variant="contained">
-            Закрыть
           </Button>
         </DialogActions>
       </Dialog>

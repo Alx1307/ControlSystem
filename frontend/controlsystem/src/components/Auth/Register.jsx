@@ -7,7 +7,7 @@ import {
   CircularProgress
 } from '@mui/material';
 import { useNavigate, Link } from 'react-router-dom';
-import { authAPI } from '../../services/api';
+import { usersAPI } from '../../services/api';
 import { validateRegisterForm } from '../../utils/validation';
 import AuthForm from './AuthForm';
 
@@ -53,7 +53,7 @@ const Register = () => {
     setServerError('');
 
     try {
-      const response = await authAPI.register(
+      const response = await usersAPI.register(
         formData.full_name,
         formData.email,
         formData.password

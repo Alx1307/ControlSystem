@@ -9,6 +9,8 @@ import Register from './components/Auth/Register';
 import Objects from './components/Objects/Objects';
 import Defects from './components/Defects/Defects';
 import Employees from './components/Employees/Employees';
+import DefectDetail from './components/Defects/DefectDetail';
+import ObjectDetail from './components/Objects/ObjectDetail';
 
 const theme = createTheme({
   palette: {
@@ -78,7 +80,9 @@ function App() {
                   <Routes>
                     <Route path="/" element={<Navigate to="/objects" />} />
                     <Route path="/objects" element={<Objects />} />
+                    <Route path="/objects/:objectId" element={<ObjectDetail />} />
                     <Route path="/defects" element={<Defects />} />
+                    <Route path="/defects/:defectId" element={<DefectDetail />} />
                     <Route path="/employees" element={<Employees />} />
                   </Routes>
                 </ProtectedLayout>

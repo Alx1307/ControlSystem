@@ -391,6 +391,43 @@ class UserController {
                 error: error.message
             });
         }
+    }
+    
+    async getEngineers(req, res) {
+        try {
+            const engineers = await User.findAll({
+                include: [{
+                    model: Role,
+                    as: 'role',
+                    where: { name: 'Инженер' }
+                }],
+                attributes: { exclude: ['password'] },
+                order: [['id', 'ASC']]
+            });
+    
+            const total = engineers.length;
+    
+            res.status(200).json({
+                success: true,
+                message: 'Список инженеров успешно получен',
+                total: total,
+                engineers: engineers.map(engineer => ({
+                    id: engineer.id,
+                    full_name: engineer.full_name,
+                    email: engineer.email,
+                    role: engineer.role.name,
+                    created_at: engineer.created_at
+                }))
+            });
+    
+        } catch (error) {
+            console.error('Ошибка получения списка инженеров:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Ошибка при получении списка инженеров',
+                error: error.message
+            });
+        }
     }    
 }
 

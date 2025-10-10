@@ -34,7 +34,7 @@ api.interceptors.response.use(
   }
 );
 
-export const authAPI = {
+export const usersAPI = {
   login: (email, password) => 
     api.post('/login', { email, password }),
 
@@ -55,6 +55,9 @@ export const authAPI = {
 
   deleteUser: (userId) => 
     api.delete(`/users/${userId}`),
+
+  getEngineers: () => 
+    api.get('/engineers'),
 };
 
 export const objectsAPI = {
@@ -75,6 +78,9 @@ export const objectsAPI = {
 
     searchObjects: (params) => 
         api.get('/objects/search', { params }),
+
+    getObjectDefects: (objectId) =>
+        api.get(`/objects/defects/${objectId}`),
 };
 
 export const historyAPI = {
@@ -83,6 +89,32 @@ export const historyAPI = {
 
     getDefectHistory: (defectId, params = {}) =>
         api.get(`/history/defect/${defectId}`, { params })
+};
+
+export const defectsAPI = {
+    getAllDefects: (params = {}) => 
+      api.get('/defects/all', { params }),
+  
+    getDefect: (defectId) => 
+      api.get(`/defects/get/${defectId}`),
+  
+    addDefect: (data) => 
+      api.post('/defects/add', data),
+  
+    updateDefect: (defectId, data) => 
+      api.patch(`/defects/${defectId}`, data),
+  
+    deleteDefect: (defectId) => 
+      api.delete(`/defects/${defectId}`),
+  
+    assignDefect: (defectId, assigneeId) => 
+      api.patch(`/defects/assign/${defectId}`, { assignee_id: assigneeId }),
+  
+    updateDefectStatus: (defectId, statusId) => 
+      api.patch(`/defects/update_status/${defectId}`, { status_id: statusId }),
+  
+    searchDefects: (params) => 
+      api.get('/defects/search', { params }),
 };
 
 export default api;

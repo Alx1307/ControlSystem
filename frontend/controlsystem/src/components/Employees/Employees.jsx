@@ -21,7 +21,7 @@ import {
   CircularProgress
 } from '@mui/material';
 import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import { authAPI } from '../../services/api';
+import { usersAPI } from '../../services/api';
 
 const Employees = () => {
   const [users, setUsers] = useState([]);
@@ -47,7 +47,7 @@ const Employees = () => {
     setLoading(true);
     setError('');
     try {
-      const response = await authAPI.getAllUsers();
+      const response = await usersAPI.getAllUsers();
       if (response.data.success) {
         setUsers(response.data.users);
       }
@@ -77,7 +77,7 @@ const Employees = () => {
 
     setLoading(true);
     try {
-      const response = await authAPI.addUser(formData.email, formData.role);
+      const response = await usersAPI.addUser(formData.email, formData.role);
       if (response.data.success) {
         setSuccess('Сотрудник успешно добавлен');
         setAddDialogOpen(false);
@@ -98,7 +98,7 @@ const Employees = () => {
 
     setLoading(true);
     try {
-      const response = await authAPI.deleteUser(selectedUser.id);
+      const response = await usersAPI.deleteUser(selectedUser.id);
       if (response.data.success) {
         setSuccess('Сотрудник успешно удален');
         setDeleteDialogOpen(false);

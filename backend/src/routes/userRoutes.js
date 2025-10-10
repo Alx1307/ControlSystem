@@ -8,6 +8,7 @@ const controller = new UserController(User);
 
 router.get('/users/:userId', authMiddleware, controller.getUser.bind(controller));
 router.get('/users', authMiddleware, controller.getAllUsers.bind(controller));
+router.get('/engineers', authMiddleware, controller.getEngineers.bind(controller));
 
 router.post('/login', controller.login.bind(controller));
 router.post('/users/add', authMiddleware, controller.addUser.bind(controller));

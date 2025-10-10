@@ -28,7 +28,7 @@ import {
   Menu as MenuIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { authAPI } from '../../services/api';
+import { usersAPI } from '../../services/api';
 
 const drawerWidth = 240;
 
@@ -113,7 +113,7 @@ const Layout = ({ children }) => {
     setSuccess('');
 
     try {
-      const response = await authAPI.updateUser(user.id, {
+      const response = await usersAPI.updateUser(user.id, {
         full_name: profileData.full_name.trim(),
         email: profileData.email.trim()
       });

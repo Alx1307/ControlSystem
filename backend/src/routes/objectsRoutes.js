@@ -9,6 +9,7 @@ const controller = new ObjectsController(Objects);
 router.get('/all', authMiddleware, controller.getAllObjects.bind(controller));
 router.get('/get/:objectId', authMiddleware, controller.getObject.bind(controller));
 router.get('/search', authMiddleware, controller.searchObjects.bind(controller));
+router.get('/defects/:objectId', authMiddleware, controller.getObjectDefects.bind(controller));
 
 router.post('/add', authMiddleware, controller.addObject.bind(controller));
 
