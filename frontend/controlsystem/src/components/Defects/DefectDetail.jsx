@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -15,7 +15,12 @@ import {
   Alert,
   CircularProgress,
   Breadcrumbs,
-  Link
+  Link,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import {
   ArrowBack as BackIcon,
@@ -23,17 +28,30 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon
 } from '@mui/icons-material';
-import { defectsAPI, historyAPI } from '../../services/api';
+import { defectsAPI, historyAPI, objectsAPI, usersAPI  } from '../../services/api';
 
 const DefectDetail = () => {
   const { defectId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [defect, setDefect] = useState(null);
+  const [objects, setObjects] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [defectHistory, setDefectHistory] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    object_id: '',
+    priority_id: '',
+    due_date: ''
+  });
+  const [formErrors, setFormErrors] = useState({});
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isManager = user.role === 'Менеджер';
@@ -55,6 +73,8 @@ const DefectDetail = () => {
 
   useEffect(() => {
     loadDefect();
+    loadObjects();
+    loadUsers();
   }, [defectId]);
 
   const loadDefect = async () => {
@@ -73,6 +93,28 @@ const DefectDetail = () => {
     }
   };
 
+  const loadObjects = async () => {
+    try {
+      const response = await objectsAPI.getAllObjects();
+      if (response.data.success) {
+        setObjects(response.data.objects || []);
+      }
+    } catch (error) {
+      console.error('Error loading objects:', error);
+    }
+  };
+
+  const loadUsers = async () => {
+    try {
+      const response = await usersAPI.getAllUsers();
+      if (response.data.success) {
+        setUsers(response.data.users || []);
+      }
+    } catch (error) {
+      console.error('Error loading users:', error);
+    }
+  };
+
   const loadDefectHistory = async () => {
     try {
       const response = await historyAPI.getDefectHistory(defectId);
@@ -82,6 +124,34 @@ const DefectDetail = () => {
     } catch (error) {
       console.error('Error loading defect history:', error);
       setError('Ошибка при загрузке истории дефекта');
+    }
+  };
+
+  const handleUpdateDefect = async () => {
+    const errors = {};
+    if (!formData.title?.trim()) errors.title = 'Название обязательно';
+    if (!formData.object_id) errors.object_id = 'Объект обязателен';
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await defectsAPI.updateDefect(defectId, formData);
+      if (response.data.success) {
+        setSuccess('Дефект успешно обновлен');
+        setEditDialogOpen(false);
+        setFormData({ title: '', description: '', object_id: '', priority_id: '', due_date: '' });
+        setFormErrors({});
+        loadDefect();
+      }
+    } catch (error) {
+      console.error('Error updating defect:', error);
+      setError(error.response?.data?.message || 'Ошибка при обновлении дефекта');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -103,6 +173,20 @@ const DefectDetail = () => {
     }
   };
 
+  const openEditDialog = () => {
+    if (!defect) return;
+    
+    setFormData({
+      title: defect.title || '',
+      description: defect.description || '',
+      object_id: defect.object_id || '',
+      priority_id: defect.priority_id?.toString() || '2',
+      due_date: defect.due_date ? defect.due_date.split('T')[0] : ''
+    });
+    setFormErrors({});
+    setEditDialogOpen(true);
+  };
+
   const openHistoryDialog = async () => {
     await loadDefectHistory();
     setHistoryDialogOpen(true);
@@ -120,6 +204,18 @@ const DefectDetail = () => {
     setDeleteDialogOpen(false);
   };
 
+  const closeEditDialog = () => {
+    setEditDialogOpen(false);
+    setFormErrors({});
+  };
+
+  const handleFormChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    if (formErrors[field]) {
+      setFormErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return 'Не указана';
     return new Date(dateString).toLocaleDateString('ru-RU');
@@ -131,6 +227,78 @@ const DefectDetail = () => {
 
   const getPriorityInfo = (priorityId) => {
     return defectPriorities.find(p => p.id === priorityId) || { name: 'Неизвестно', color: 'default' };
+  };
+
+  const getFieldLabel = (field) => {
+    const labels = {
+      title: 'Название',
+      description: 'Описание',
+      object_id: 'Объект',
+      priority_id: 'Приоритет',
+      status_id: 'Статус',
+      assignee_id: 'Исполнитель',
+      due_date: 'Срок выполнения',
+      reporter_id: 'Создатель'
+    };
+    return labels[field] || field;
+  };
+  
+  const formatHistoryValue = (field, value, historyItem = null, isOld = false) => {
+    if (!value && value !== 0) return 'Не указано';
+    
+    if (field.includes('date')) {
+      return formatDate(value);
+    }
+    
+    if (field === 'status_id') {
+      const status = getStatusInfo(parseInt(value));
+      return status.name;
+    }
+    
+    if (field === 'priority_id') {
+      const priority = getPriorityInfo(parseInt(value));
+      return priority.name;
+    }
+    
+    if (field === 'object_id') {
+      const object = objects.find(obj => obj.id === parseInt(value));
+      return object ? object.name : `Объект ID: ${value}`;
+    }
+    
+    if (field === 'assignee_id' || field === 'reporter_id') {
+      if (!value) return 'Не назначен';
+      
+      const user = users.find(u => u.id === parseInt(value));
+      if (user) {
+        return `${user.full_name} (${user.email})`;
+      }
+      
+      if (historyItem && historyItem.user && historyItem.user.id === parseInt(value)) {
+        return `${historyItem.user.full_name} (${historyItem.user.email})`;
+      }
+      
+      return `Пользователь ID: ${value}`;
+    }
+    
+    return String(value);
+  };
+  
+  const getActionLabel = (action) => {
+    const actions = {
+      CREATE: 'Создание',
+      UPDATE: 'Изменение',
+      DELETE: 'Удаление'
+    };
+    return actions[action] || action;
+  };
+  
+  const getActionColor = (action) => {
+    const colors = {
+      CREATE: 'success',
+      UPDATE: 'primary',
+      DELETE: 'error'
+    };
+    return colors[action] || 'default';
   };
 
   if (loading && !defect) {
@@ -195,21 +363,32 @@ const DefectDetail = () => {
           </Box>
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
-          <IconButton
-            color="info"
-            onClick={openHistoryDialog}
-            title="История изменений"
-          >
-            <HistoryIcon />
-          </IconButton>
-          <Button
-            startIcon={<BackIcon />}
-            onClick={() => navigate('/defects')}
-          >
-            Назад
-          </Button>
+        <Button
+          startIcon={<BackIcon />}
+          onClick={() => {
+            if (location.state?.fromObject && location.state?.objectId) {
+              navigate(`/objects/${location.state.objectId}`);
+            } else {
+              navigate('/defects');
+            }
+          }}
+        >
+          Назад
+        </Button>
         </Box>
       </Box>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
+          {error}
+        </Alert>
+      )}
+
+      {success && (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>
+          {success}
+        </Alert>
+      )}
 
       <Grid container spacing={3}>
         <Grid item xs={12} md={8}>
@@ -304,7 +483,7 @@ const DefectDetail = () => {
                     <>
                       <Button
                         startIcon={<EditIcon />}
-                        onClick={() => navigate(`/defects/edit/${defect.id}`)}
+                        onClick={openEditDialog}
                         variant="outlined"
                       >
                         Редактировать
@@ -346,6 +525,94 @@ const DefectDetail = () => {
         </Grid>
       </Grid>
 
+      <Dialog open={editDialogOpen} onClose={closeEditDialog} maxWidth="md" fullWidth>
+        <DialogTitle>Редактировать дефект</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Название *"
+            fullWidth
+            variant="outlined"
+            value={formData.title}
+            onChange={(e) => handleFormChange('title', e.target.value)}
+            error={!!formErrors.title}
+            helperText={formErrors.title}
+            disabled={loading}
+            sx={{ mt: 2 }}
+          />
+          <TextField
+            margin="dense"
+            label="Описание"
+            fullWidth
+            multiline
+            rows={3}
+            variant="outlined"
+            value={formData.description}
+            onChange={(e) => handleFormChange('description', e.target.value)}
+            disabled={loading}
+          />
+          <FormControl fullWidth margin="dense" error={!!formErrors.object_id}>
+            <InputLabel>Объект *</InputLabel>
+            <Select
+              value={formData.object_id}
+              onChange={(e) => handleFormChange('object_id', e.target.value)}
+              disabled={loading}
+              label="Объект *"
+            >
+              {objects.map((object) => (
+                <MenuItem key={object.id} value={object.id}>
+                  {object.name} - {object.address}
+                </MenuItem>
+              ))}
+            </Select>
+            {formErrors.object_id && (
+              <Typography variant="caption" color="error">
+                {formErrors.object_id}
+              </Typography>
+            )}
+          </FormControl>
+          <FormControl fullWidth margin="dense">
+            <InputLabel>Приоритет</InputLabel>
+            <Select
+              value={formData.priority_id}
+              onChange={(e) => handleFormChange('priority_id', e.target.value)}
+              disabled={loading}
+              label="Приоритет"
+            >
+              {defectPriorities.map((priority) => (
+                <MenuItem key={priority.id} value={priority.id}>
+                  {priority.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <TextField
+            margin="dense"
+            label="Срок выполнения"
+            type="date"
+            fullWidth
+            variant="outlined"
+            value={formData.due_date}
+            onChange={(e) => handleFormChange('due_date', e.target.value)}
+            disabled={loading}
+            InputLabelProps={{ shrink: true }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeEditDialog} disabled={loading}>
+            Отмена
+          </Button>
+          <Button 
+            onClick={handleUpdateDefect} 
+            variant="contained" 
+            disabled={loading}
+          >
+            {loading ? <CircularProgress size={24} /> : 'Сохранить'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Dialog open={deleteDialogOpen} onClose={closeDeleteDialog}>
         <DialogTitle>Подтверждение удаления</DialogTitle>
         <DialogContent>
@@ -368,30 +635,96 @@ const DefectDetail = () => {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={historyDialogOpen} onClose={closeHistoryDialog} maxWidth="lg" fullWidth>
+      <Dialog open={historyDialogOpen} onClose={closeHistoryDialog} maxWidth="lg" fullWidth scroll="paper">
         <DialogTitle>
           История изменений дефекта: {defect.title}
         </DialogTitle>
         <DialogContent>
           {defectHistory.length === 0 ? (
-            <Typography>История изменений отсутствует</Typography>
+            <Typography color="text.secondary" sx={{ py: 2 }}>
+              История изменений отсутствует
+            </Typography>
           ) : (
             <Box sx={{ mt: 2 }}>
               {defectHistory.map((historyItem) => (
-                <Paper key={historyItem.id} sx={{ p: 2, mb: 1 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <Paper key={historyItem.id} sx={{ p: 2, mb: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
                     <Box>
-                      <Typography variant="subtitle2">
+                      <Typography variant="subtitle1" fontWeight="bold">
                         {historyItem.user?.full_name || 'Неизвестный пользователь'}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
                         {new Date(historyItem.changed_at).toLocaleString('ru-RU')}
                       </Typography>
                     </Box>
+                    <Chip 
+                      label={getActionLabel(historyItem.action)} 
+                      color={getActionColor(historyItem.action)} 
+                      size="small" 
+                    />
                   </Box>
-                  <Typography variant="body2" sx={{ mt: 1 }}>
-                    {historyItem.changes || 'Изменения не указаны'}
-                  </Typography>
+                  
+                  {historyItem.action === 'CREATE' ? (
+                    <Box>
+                      <Typography variant="body2" color="text.secondary" gutterBottom>
+                        Дефект создан со следующими данными:
+                      </Typography>
+                      {Object.entries(historyItem.changes).map(([field, value]) => (
+                        <Box key={field} sx={{ display: 'flex', mb: 0.5 }}>
+                          <Typography variant="body2" sx={{ minWidth: 140, fontWeight: 'medium' }}>
+                            {getFieldLabel(field)}:
+                          </Typography>
+                          <Typography variant="body2" sx={{ ml: 1 }}>
+                            {formatHistoryValue(field, value, historyItem)}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                  ) : historyItem.action === 'DELETE' ? (
+                    <Box>
+                      <Typography variant="body2" color="error" gutterBottom>
+                        Дефект удален. Данные на момент удаления:
+                      </Typography>
+                      {Object.entries(historyItem.changes).map(([field, value]) => (
+                        <Box key={field} sx={{ display: 'flex', mb: 0.5 }}>
+                          <Typography variant="body2" sx={{ minWidth: 140, fontWeight: 'medium' }}>
+                            {getFieldLabel(field)}:
+                          </Typography>
+                          <Typography variant="body2" sx={{ ml: 1 }}>
+                            {formatHistoryValue(field, value, historyItem)}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                  ) : (
+                    <Box>
+                      <Typography variant="body2" color="text.secondary" gutterBottom>
+                        Измененные поля:
+                      </Typography>
+                      {Object.entries(historyItem.changes).map(([field, changes]) => {
+                        if (!changes || changes.old === undefined || changes.new === undefined) return null;
+                        
+                        if (changes.old === changes.new) return null;
+                        
+                        return (
+                          <Box key={field} sx={{ mb: 1 }}>
+                            <Typography variant="body2" fontWeight="medium">
+                              {getFieldLabel(field)}:
+                            </Typography>
+                            <Box sx={{ display: 'flex', ml: 2, alignItems: 'center' }}>
+                              <Typography variant="body2" color="error" sx={{ flex: 1 }}>
+                                <s>{formatHistoryValue(field, changes.old, historyItem, true)}</s>
+                              </Typography>
+                              <Typography variant="body2" sx={{ mx: 1 }}>→</Typography>
+                              <Typography variant="body2" color="success" sx={{ flex: 1 }}>
+                                {formatHistoryValue(field, changes.new, historyItem)}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        );
+                      }).filter(Boolean)}
+                    </Box>
+                  )}
                 </Paper>
               ))}
             </Box>

@@ -28,10 +28,8 @@ import {
   Add as AddIcon, 
   Delete as DeleteIcon, 
   Edit as EditIcon,
-  Visibility as ViewIcon,
-  History as HistoryIcon,
   Engineering as AssignIcon,
-  PriorityHigh as UpdateStatusIcon
+  Checklist as UpdateStatusIcon
 } from '@mui/icons-material';
 import { defectsAPI, usersAPI, historyAPI, objectsAPI } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
@@ -306,12 +304,6 @@ const Defects = () => {
     setStatusDialogOpen(true);
   };
 
-  const openHistoryDialog = async (defect) => {
-    setSelectedDefect(defect);
-    await loadDefectHistory(defect.id);
-    setHistoryDialogOpen(true);
-  };
-
   const closeAllDialogs = () => {
     setAddDialogOpen(false);
     setEditDialogOpen(false);
@@ -452,13 +444,6 @@ const Defects = () => {
                       </TableCell>
                       <TableCell>{formatDate(defect.due_date)}</TableCell>
                       <TableCell align="center">
-                        <IconButton
-                          color="info"
-                          onClick={() => openHistoryDialog(defect)}
-                          title="История изменений"
-                        >
-                          <HistoryIcon />
-                        </IconButton>
                         {canChangeStatus(defect) && (
                           <IconButton
                             color="secondary"
@@ -470,7 +455,7 @@ const Defects = () => {
                         )}
                         {canAssignDefect(defect) && (
                           <IconButton
-                            color="warning"
+                            color="info"
                             onClick={() => openAssignDialog(defect)}
                             title="Назначить инженера"
                           >

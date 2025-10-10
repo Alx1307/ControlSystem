@@ -18,20 +18,21 @@ import {
   TextField,
   Alert,
   CircularProgress,
-  Card,
-  CardContent,
   Grid,
-  Chip
+  Chip,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import { 
   Add as AddIcon, 
   Delete as DeleteIcon, 
   Edit as EditIcon,
-  Visibility as ViewIcon,
-  History as HistoryIcon
+  Build as DefectIcon 
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { objectsAPI, historyAPI } from '../../services/api';
+import { objectsAPI, defectsAPI } from '../../services/api';
 
 const Objects = () => {
   const navigate = useNavigate();
@@ -54,9 +55,23 @@ const Objects = () => {
     end_date: ''
   });
   const [formErrors, setFormErrors] = useState({});
+  const [addDefectDialogOpen, setAddDefectDialogOpen] = useState(false);
+  const [defectFormData, setDefectFormData] = useState({
+    title: '',
+    description: '',
+    priority_id: '2',
+    due_date: ''
+  });
+  const [defectFormErrors, setDefectFormErrors] = useState({});
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isManager = user.role === 'Менеджер';
+
+  const defectPriorities = [
+    { id: 1, name: 'Низкий', color: 'success' },
+    { id: 2, name: 'Средний', color: 'warning' },
+    { id: 3, name: 'Высокий', color: 'error' }
+  ];
 
   useEffect(() => {
     loadObjects();
@@ -78,15 +93,53 @@ const Objects = () => {
     }
   };
 
-  const loadObjectHistory = async (objectId) => {
+  const handleAddDefect = async () => {
+    const errors = {};
+    if (!defectFormData.title?.trim()) errors.title = 'Название обязательно';
+
+    if (Object.keys(errors).length > 0) {
+      setDefectFormErrors(errors);
+      return;
+    }
+
+    setLoading(true);
     try {
-      const response = await historyAPI.getObjectHistory(objectId);
+      const response = await defectsAPI.addDefect({
+        ...defectFormData,
+        object_id: selectedObject.id
+      });
       if (response.data.success) {
-        setObjectHistory(response.data.history || []);
+        setSuccess('Дефект успешно создан');
+        setAddDefectDialogOpen(false);
+        setDefectFormData({ title: '', description: '', priority_id: '2', due_date: '' });
+        setDefectFormErrors({});
+        setSelectedObject(null);
       }
     } catch (error) {
-      console.error('Error loading object history:', error);
-      setError('Ошибка при загрузке истории объекта');
+      console.error('Error adding defect:', error);
+      setError(error.response?.data?.message || 'Ошибка при создании дефекта');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openAddDefectDialog = (object) => {
+    setSelectedObject(object);
+    setDefectFormData({ title: '', description: '', priority_id: '2', due_date: '' });
+    setDefectFormErrors({});
+    setAddDefectDialogOpen(true);
+  };
+
+  const closeAddDefectDialog = () => {
+    setAddDefectDialogOpen(false);
+    setDefectFormErrors({});
+    setSelectedObject(null);
+  };
+
+  const handleDefectFormChange = (field, value) => {
+    setDefectFormData(prev => ({ ...prev, [field]: value }));
+    if (defectFormErrors[field]) {
+      setDefectFormErrors(prev => ({ ...prev, [field]: '' }));
     }
   };
 
@@ -172,6 +225,16 @@ const Objects = () => {
     setAddDialogOpen(true);
   };
 
+  const openAddDefect = (object) => {
+    navigate('/defects', { 
+      state: { 
+        fromObject: true, 
+        objectId: object.id,
+        objectName: object.name 
+      } 
+    });
+  };
+
   const openEditDialog = (object) => {
     setSelectedObject(object);
     setFormData({
@@ -194,17 +257,12 @@ const Objects = () => {
     navigate(`/objects/${object.id}`);
   };
 
-  const openHistoryDialog = async (object) => {
-    setSelectedObject(object);
-    await loadObjectHistory(object.id);
-    setHistoryDialogOpen(true);
-  };
-
   const closeAllDialogs = () => {
     setAddDialogOpen(false);
     setEditDialogOpen(false);
     setDeleteDialogOpen(false);
     setHistoryDialogOpen(false);
+    setAddDefectDialogOpen(false);
     setFormData({ name: '', description: '', address: '', start_date: '', end_date: '' });
     setFormErrors({});
     setSelectedObject(null);
@@ -294,13 +352,31 @@ const Objects = () => {
                   return (
                     <TableRow key={object.id} hover>
                       <TableCell>
-                        <Button
+                        <Box 
                           onClick={() => openObjectDetail(object)}
-                          sx={{ textTransform: 'none', justifyContent: 'flex-start' }}
-                          color="primary"
+                          sx={{
+                            cursor: 'pointer',
+                            '&:hover': {
+                              backgroundColor: 'action.hover',
+                              borderRadius: 1
+                            },
+                            p: 1,
+                            ml: -1,
+                            mr: -1
+                          }}
                         >
-                          {object.name}
-                        </Button>
+                          <Typography 
+                            variant="body1" 
+                            color="primary"
+                            sx={{
+                              fontWeight: 500,
+                              whiteSpace: 'normal',
+                              wordBreak: 'break-word'
+                            }}
+                          >
+                            {object.name}
+                          </Typography>
+                        </Box>
                       </TableCell>
                       <TableCell>{object.address}</TableCell>
                       <TableCell>
@@ -313,15 +389,15 @@ const Objects = () => {
                       <TableCell>{formatDate(object.start_date)}</TableCell>
                       <TableCell>{formatDate(object.end_date)}</TableCell>
                       <TableCell align="center">
-                        <IconButton
-                          color="info"
-                          onClick={() => openHistoryDialog(object)}
-                          title="История изменений"
-                        >
-                          <HistoryIcon />
-                        </IconButton>
                         {isManager && (
-                          <>
+                          <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center', flexWrap: 'nowrap' }}>
+                            <IconButton
+                              color="success"
+                              onClick={() => openAddDefectDialog(object)}
+                              title="Добавить дефект"
+                            >
+                              <DefectIcon />
+                            </IconButton>
                             <IconButton
                               color="warning"
                               onClick={() => openEditDialog(object)}
@@ -336,7 +412,7 @@ const Objects = () => {
                             >
                               <DeleteIcon />
                             </IconButton>
-                          </>
+                          </Box>
                         )}
                       </TableCell>
                     </TableRow>
@@ -573,6 +649,78 @@ const Objects = () => {
         <DialogActions>
           <Button onClick={closeAllDialogs} variant="contained">
             Закрыть
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={addDefectDialogOpen} onClose={closeAddDefectDialog} maxWidth="md" fullWidth>
+        <DialogTitle>
+          Добавить дефект к объекту: {selectedObject?.name}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Объект: {selectedObject?.name} - {selectedObject?.address}
+          </Typography>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Название дефекта *"
+            fullWidth
+            variant="outlined"
+            value={defectFormData.title}
+            onChange={(e) => handleDefectFormChange('title', e.target.value)}
+            error={!!defectFormErrors.title}
+            helperText={defectFormErrors.title}
+            disabled={loading}
+          />
+          <TextField
+            margin="dense"
+            label="Описание"
+            fullWidth
+            multiline
+            rows={3}
+            variant="outlined"
+            value={defectFormData.description}
+            onChange={(e) => handleDefectFormChange('description', e.target.value)}
+            disabled={loading}
+          />
+          <FormControl fullWidth margin="dense">
+            <InputLabel>Приоритет</InputLabel>
+            <Select
+              value={defectFormData.priority_id}
+              onChange={(e) => handleDefectFormChange('priority_id', e.target.value)}
+              disabled={loading}
+              label="Приоритет"
+            >
+              {defectPriorities.map((priority) => (
+                <MenuItem key={priority.id} value={priority.id}>
+                  {priority.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <TextField
+            margin="dense"
+            label="Срок выполнения"
+            type="date"
+            fullWidth
+            variant="outlined"
+            value={defectFormData.due_date}
+            onChange={(e) => handleDefectFormChange('due_date', e.target.value)}
+            disabled={loading}
+            InputLabelProps={{ shrink: true }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeAddDefectDialog} disabled={loading}>
+            Отмена
+          </Button>
+          <Button 
+            onClick={handleAddDefect} 
+            variant="contained" 
+            disabled={loading}
+          >
+            {loading ? <CircularProgress size={24} /> : 'Создать дефект'}
           </Button>
         </DialogActions>
       </Dialog>

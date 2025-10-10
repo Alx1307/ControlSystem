@@ -23,7 +23,7 @@ import {
 } from '@mui/material';
 import {
   Business as BusinessIcon,
-  BugReport as DefectsIcon,
+  Build as DefectsIcon,
   People as PeopleIcon,
   Menu as MenuIcon
 } from '@mui/icons-material';

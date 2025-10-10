@@ -81,6 +81,9 @@ export const objectsAPI = {
 
     getObjectDefects: (objectId) =>
         api.get(`/objects/defects/${objectId}`),
+
+    getObjectHistory: (objectId, page = 1, limit = 10) => 
+        api.get(`/history/object/${objectId}?page=${page}&limit=${limit}`),
 };
 
 export const historyAPI = {
