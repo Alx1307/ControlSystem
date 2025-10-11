@@ -137,4 +137,21 @@ export const commentsAPI = {
       api.delete(`/comments/delete/${commentId}`)
 };
 
+export const attachmentsAPI = {
+    getDefectAttachments: (defectId) =>
+        api.get(`/attachments/all/${defectId}`),
+
+    uploadAttachment: (defectId, formData) =>
+        api.post(`/attachments/upload/${defectId}`, formData, {headers: { 'Content-Type': 'multipart/form-data' }}),
+
+    deleteAttachment: (attachmentId) =>
+        api.delete(`/attachments/delete/${attachmentId}`),
+
+    downloadAttachment: (attachmentId) =>
+        api.get(`/attachments/download/${attachmentId}`, {responseType: 'blob'}),
+
+    previewAttachment: (attachmentId) =>
+        api.get(`/attachments/preview/${attachmentId}`, {responseType: 'blob'})
+};
+
 export default api;

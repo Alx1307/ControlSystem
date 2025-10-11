@@ -26,7 +26,12 @@ import {
   Divider,
   Card,
   CardContent,
-  CardActions
+  CardActions,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
+  ListItemSecondaryAction
 } from '@mui/material';
 import {
   ArrowBack as BackIcon,
@@ -38,9 +43,12 @@ import {
   Checklist as UpdateStatusIcon,
   Comment as CommentIcon,
   AttachFile as AttachFileIcon,
-  MoreVert as MoreVertIcon
+  MoreVert as MoreVertIcon,
+  Download as DownloadIcon,
+  Visibility as PreviewIcon,
+  Add as AddIcon
 } from '@mui/icons-material';
-import { defectsAPI, historyAPI, objectsAPI, usersAPI, commentsAPI  } from '../../services/api';
+import { defectsAPI, historyAPI, objectsAPI, usersAPI, commentsAPI, attachmentsAPI  } from '../../services/api';
 
 const DefectDetail = () => {
   const { defectId } = useParams();
@@ -79,6 +87,16 @@ const DefectDetail = () => {
     commentId: null,
     commentContent: ''
   });
+  const [attachments, setAttachments] = useState([]);
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [deleteAttachmentDialog, setDeleteAttachmentDialog] = useState({
+    open: false,
+    attachmentId: null,
+    fileName: ''
+  });
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isManager = user.role === 'Менеджер';
@@ -102,6 +120,20 @@ const DefectDetail = () => {
     if (!defect) return false;
     if (isManager) return true;
     if (isEngineer && defect.assignee_id === user.id) return true;
+    return false;
+  };
+
+  const canUploadAttachment = () => {
+    if (!defect) return false;
+    if (isManager) return true;
+    if (isEngineer && defect.assignee_id === user.id) return true;
+    return false;
+  };
+
+  const canDeleteAttachment = (attachment) => {
+    if (!defect || !attachment) return false;
+    if (isManager && attachment.uploaded_by === user.id) return true;
+    if (isEngineer && defect.assignee_id === user.id && attachment.uploaded_by === user.id) return true;
     return false;
   };
 
@@ -158,6 +190,7 @@ const DefectDetail = () => {
     loadObjects();
     loadUsers();
     loadComments();
+    loadAttachments();
     if (isManager) {
       loadEngineers();
     }
@@ -213,6 +246,21 @@ const DefectDetail = () => {
       setError(error.response?.data?.message || 'Ошибка при загрузке комментариев');
     } finally {
       setCommentsLoading(false);
+    }
+  };
+
+  const loadAttachments = async () => {
+    setAttachmentsLoading(true);
+    try {
+      const response = await attachmentsAPI.getDefectAttachments(defectId);
+      if (response.data.success) {
+        setAttachments(response.data.attachments || []);
+      }
+    } catch (error) {
+      console.error('Error loading attachments:', error);
+      setError(error.response?.data?.message || 'Ошибка при загрузке вложений');
+    } finally {
+      setAttachmentsLoading(false);
     }
   };
 
@@ -376,6 +424,103 @@ const DefectDetail = () => {
     }
   };
 
+  const handleUploadAttachment = async () => {
+    if (!selectedFile) return;
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+
+      const response = await attachmentsAPI.uploadAttachment(defectId, formData);
+      if (response.data.success) {
+        setSuccess('Файл успешно загружен');
+        setUploadDialogOpen(false);
+        setSelectedFile(null);
+        loadAttachments();
+      }
+    } catch (error) {
+      console.error('Error uploading attachment:', error);
+      setError(error.response?.data?.message || 'Ошибка при загрузке файла');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteAttachment = async (attachmentId) => {
+    try {
+      const response = await attachmentsAPI.deleteAttachment(attachmentId);
+      if (response.data.success) {
+        setSuccess('Файл успешно удален');
+        setDeleteAttachmentDialog({ open: false, attachmentId: null, fileName: '' });
+        loadAttachments();
+      }
+    } catch (error) {
+      console.error('Error deleting attachment:', error);
+      setError(error.response?.data?.message || 'Ошибка при удалении файла');
+    }
+  };
+
+  const handleDownloadAttachment = async (attachmentId, fileName) => {
+    try {
+      const response = await attachmentsAPI.downloadAttachment(attachmentId);
+      const blob = new Blob([response.data]);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading attachment:', error);
+      setError(error.response?.data?.message || 'Ошибка при скачивании файла');
+    }
+  };
+
+  const handlePreviewAttachment = async (attachmentId) => {
+    try {
+      const response = await attachmentsAPI.previewAttachment(attachmentId, {
+        responseType: 'blob'
+      });
+      
+      const blob = new Blob([response.data], { type: response.data.type });
+      const url = window.URL.createObjectURL(blob);
+      
+      const newWindow = window.open(url, '_blank');
+      
+      if (newWindow) {
+        newWindow.onload = () => {
+          window.URL.revokeObjectURL(url);
+        };
+      } else {
+        setTimeout(() => {
+          window.URL.revokeObjectURL(url);
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Error previewing attachment:', error);
+      setError(error.response?.data?.message || 'Ошибка при просмотре файла');
+    }
+  };
+
+  const getFileIcon = (fileType) => {
+    if (fileType.startsWith('image/')) return <AttachFileIcon color="primary" />;
+    if (fileType === 'application/pdf') return <AttachFileIcon color="error" />;
+    if (fileType.includes('word') || fileType.includes('document')) return <AttachFileIcon color="info" />;
+    if (fileType.includes('excel') || fileType.includes('sheet')) return <AttachFileIcon color="success" />;
+    return <AttachFileIcon />;
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
   const startEditComment = (comment) => {
     setEditingComment(comment.id);
     setEditCommentText(comment.content);
@@ -419,6 +564,10 @@ const DefectDetail = () => {
     setHistoryDialogOpen(true);
   };
 
+  const openUploadDialog = () => {
+    setUploadDialogOpen(true);
+  };
+
   const closeHistoryDialog = () => {
     setHistoryDialogOpen(false);
   };
@@ -446,10 +595,22 @@ const DefectDetail = () => {
     setSelectedStatus('');
   };
 
+  const closeUploadDialog = () => {
+    setUploadDialogOpen(false);
+    setSelectedFile(null);
+  };
+
   const handleFormChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (formErrors[field]) {
       setFormErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
+  const handleFileSelect = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      setSelectedFile(file);
     }
   };
 
@@ -704,6 +865,95 @@ const DefectDetail = () => {
               </Grid>
             </Grid>
           </Paper>
+
+          <Paper sx={{ p: 3, mb: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <AttachFileIcon />
+                Вложения
+              </Typography>
+              {canUploadAttachment() && (
+                <Button
+                  startIcon={<AddIcon />}
+                  onClick={openUploadDialog}
+                  variant="contained"
+                  size="small"
+                >
+                  Добавить файл
+                </Button>
+              )}
+            </Box>
+
+            {attachmentsLoading ? (
+              <Box display="flex" justifyContent="center" py={3}>
+                <CircularProgress />
+              </Box>
+            ) : attachments.length === 0 ? (
+              <Typography color="text.secondary" textAlign="center" py={3}>
+                Вложений пока нет
+              </Typography>
+            ) : (
+              <List>
+                {attachments.map((attachment) => (
+                  <ListItem key={attachment.id} divider>
+                    <ListItemIcon>
+                      {getFileIcon(attachment.file_type)}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={attachment.file_name}
+                      secondary={
+                        <Box component="div">
+                          <Typography variant="caption" display="block">
+                            Загружено: {formatDateTime(attachment.uploaded_at)}
+                          </Typography>
+                          <Typography variant="caption" display="block">
+                            Пользователь: {attachment.uploadedBy?.full_name}
+                          </Typography>
+                          <Typography variant="caption" display="block">
+                            Тип: {attachment.file_type}
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                    <ListItemSecondaryAction>
+                      <Box sx={{ display: 'flex', gap: 1 }}>
+                        {attachment.file_type.startsWith('image/') && (
+                          <IconButton
+                            size="small"
+                            onClick={() => handlePreviewAttachment(attachment.id)}
+                            title="Просмотреть"
+                          >
+                            <PreviewIcon />
+                          </IconButton>
+                        )}
+                        <IconButton
+                          size="small"
+                          onClick={() => handleDownloadAttachment(attachment.id, attachment.file_name)}
+                          title="Скачать"
+                        >
+                          <DownloadIcon />
+                        </IconButton>
+                        {canDeleteAttachment(attachment) && (
+                          <IconButton
+                            size="small"
+                            onClick={() => setDeleteAttachmentDialog({ 
+                              open: true, 
+                              attachmentId: attachment.id, 
+                              fileName: attachment.file_name 
+                            })}
+                            title="Удалить"
+                            color="error"
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        )}
+                      </Box>
+                    </ListItemSecondaryAction>
+                  </ListItem>
+                ))}
+              </List>
+            )}
+          </Paper>
         </Grid>
 
         <Grid item xs={12} md={4}>
@@ -913,6 +1163,83 @@ const DefectDetail = () => {
           </Paper>
         </Grid>
       </Grid>
+
+      <Dialog open={uploadDialogOpen} onClose={closeUploadDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Загрузить файл</DialogTitle>
+        <DialogContent>
+          <Typography gutterBottom>
+            Дефект: {defect?.title}
+          </Typography>
+          <Box sx={{ mt: 2 }}>
+            <input
+              type="file"
+              accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+              onChange={handleFileSelect}
+              style={{ display: 'none' }}
+              id="file-upload"
+            />
+            <label htmlFor="file-upload">
+              <Button variant="outlined" component="span" fullWidth>
+                Выбрать файл
+              </Button>
+            </label>
+            {selectedFile && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2">
+                  Выбранный файл: {selectedFile.name}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Размер: {formatFileSize(selectedFile.size)}
+                </Typography>
+              </Box>
+            )}
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+              Разрешены: изображения (JPEG, PNG, GIF, WEBP), PDF, документы (DOC, DOCX), таблицы (XLS, XLSX), текстовые файлы. Максимальный размер: 10MB.
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeUploadDialog} disabled={uploading}>
+            Отмена
+          </Button>
+          <Button 
+            onClick={handleUploadAttachment} 
+            variant="contained" 
+            disabled={!selectedFile || uploading}
+          >
+            {uploading ? <CircularProgress size={24} /> : 'Загрузить'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog 
+        open={deleteAttachmentDialog.open} 
+        onClose={() => setDeleteAttachmentDialog({ open: false, attachmentId: null, fileName: '' })}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Подтверждение удаления</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Вы уверены, что хотите удалить файл "{deleteAttachmentDialog.fileName}"?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setDeleteAttachmentDialog({ open: false, attachmentId: null, fileName: '' })}
+            variant="outlined"
+          >
+            Отмена
+          </Button>
+          <Button 
+            onClick={() => handleDeleteAttachment(deleteAttachmentDialog.attachmentId)} 
+            color="error" 
+            variant="contained"
+          >
+            Удалить
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={editDialogOpen} onClose={closeEditDialog} maxWidth="md" fullWidth>
         <DialogTitle>Редактировать дефект</DialogTitle>

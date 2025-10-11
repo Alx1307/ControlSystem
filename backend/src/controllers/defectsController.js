@@ -126,9 +126,7 @@ class DefectsController {
             const where = {};
     
             if (currentUser.role === 'Инженер') {
-                where[Op.or] = [
-                    { assignee_id: currentUser.id }
-                ];
+                where.assignee_id = currentUser.id;
             }
     
             const { count, rows: defects } = await this.Defect.findAndCountAll({
@@ -560,21 +558,31 @@ class DefectsController {
                 sortOrder = 'ASC'
             } = req.query;
             
+            const currentUser = req.user;
             const where = {};
             const order = [[sortBy, sortOrder.toUpperCase()]];
+    
+            if (currentUser.role === 'Инженер') {
+                where.assignee_id = currentUser.id;
+            }
     
             if (title) where.title = { [Op.iLike]: `%${title}%` };
             if (description) where.description = { [Op.iLike]: `%${description}%` };
             if (object_id) where.object_id = object_id;
             if (status_id) where.status_id = status_id;
             if (priority_id) where.priority_id = priority_id;
-            if (assignee_id) {
+            
+            if (currentUser.role === 'Менеджер' && assignee_id) {
                 if (assignee_id === 'unassigned') {
                     where.assignee_id = { [Op.is]: null };
                 } else {
                     where.assignee_id = assignee_id;
                 }
             }
+            
+            if (currentUser.role === 'Инженер' && assignee_id) {
+            }
+    
             if (reporter_id) where.reporter_id = reporter_id;
     
             const offset = (page - 1) * limit;

@@ -35,7 +35,7 @@ Defect.hasMany(Attachment, { foreignKey: 'defect_id' });
 Attachment.belongsTo(Defect, { foreignKey: 'defect_id' });
 
 User.hasMany(Attachment, { foreignKey: 'uploaded_by' });
-Attachment.belongsTo(User, { foreignKey: 'uploaded_by', as: 'uploader' });
+Attachment.belongsTo(User, { foreignKey: 'uploaded_by', as: 'uploadedBy' });
 
 User.hasMany(ChangeHistory, { foreignKey: 'user_id' });
 ChangeHistory.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
