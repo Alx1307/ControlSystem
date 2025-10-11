@@ -123,4 +123,18 @@ export const defectsAPI = {
       api.get('/defects/search', { params }),
 };
 
+export const commentsAPI = {
+    getDefectComments: (defectId, params = {}) => 
+      api.get(`/comments/all/${defectId}`, { params }),
+    
+    addComment: (defectId, data) => 
+      api.post(`/comments/add/${defectId}`, data),
+    
+    updateComment: (commentId, data) => 
+      api.patch(`/comments/update/${commentId}`, data),
+    
+    deleteComment: (commentId) => 
+      api.delete(`/comments/delete/${commentId}`)
+};
+
 export default api;

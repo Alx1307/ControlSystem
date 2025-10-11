@@ -20,7 +20,13 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Tooltip
+  Tooltip,
+  Avatar,
+  IconButton,
+  Divider,
+  Card,
+  CardContent,
+  CardActions
 } from '@mui/material';
 import {
   ArrowBack as BackIcon,
@@ -29,9 +35,12 @@ import {
   Delete as DeleteIcon,
   Warning as WarningIcon,
   Engineering as AssignIcon,
-  Checklist as UpdateStatusIcon
+  Checklist as UpdateStatusIcon,
+  Comment as CommentIcon,
+  AttachFile as AttachFileIcon,
+  MoreVert as MoreVertIcon
 } from '@mui/icons-material';
-import { defectsAPI, historyAPI, objectsAPI, usersAPI  } from '../../services/api';
+import { defectsAPI, historyAPI, objectsAPI, usersAPI, commentsAPI  } from '../../services/api';
 
 const DefectDetail = () => {
   const { defectId } = useParams();
@@ -60,6 +69,16 @@ const DefectDetail = () => {
   const [formErrors, setFormErrors] = useState({});
   const [selectedEngineer, setSelectedEngineer] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
+  const [comments, setComments] = useState([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [newComment, setNewComment] = useState('');
+  const [editingComment, setEditingComment] = useState(null);
+  const [editCommentText, setEditCommentText] = useState('');
+  const [deleteCommentDialog, setDeleteCommentDialog] = useState({
+    open: false,
+    commentId: null,
+    commentContent: ''
+  });
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isManager = user.role === 'Менеджер';
@@ -78,6 +97,13 @@ const DefectDetail = () => {
     { id: 2, name: 'Средний', color: 'warning' },
     { id: 3, name: 'Высокий', color: 'error' }
   ];
+
+  const canComment = () => {
+    if (!defect) return false;
+    if (isManager) return true;
+    if (isEngineer && defect.assignee_id === user.id) return true;
+    return false;
+  };
 
   const isDefectOverdue = (defect) => {
     if (!defect || !defect.due_date) return false;
@@ -131,6 +157,7 @@ const DefectDetail = () => {
     loadDefect();
     loadObjects();
     loadUsers();
+    loadComments();
     if (isManager) {
       loadEngineers();
     }
@@ -171,6 +198,21 @@ const DefectDetail = () => {
       }
     } catch (error) {
       console.error('Error loading users:', error);
+    }
+  };
+
+  const loadComments = async () => {
+    setCommentsLoading(true);
+    try {
+      const response = await commentsAPI.getDefectComments(defectId);
+      if (response.data.success) {
+        setComments(response.data.comments || []);
+      }
+    } catch (error) {
+      console.error('Error loading comments:', error);
+      setError(error.response?.data?.message || 'Ошибка при загрузке комментариев');
+    } finally {
+      setCommentsLoading(false);
     }
   };
 
@@ -284,6 +326,66 @@ const DefectDetail = () => {
     }
   };
 
+  const handleAddComment = async () => {
+    if (!newComment.trim()) return;
+
+    try {
+      const response = await commentsAPI.addComment(defectId, {
+        content: newComment.trim()
+      });
+      if (response.data.success) {
+        setNewComment('');
+        setSuccess('Комментарий успешно добавлен');
+        loadComments();
+      }
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      setError(error.response?.data?.message || 'Ошибка при добавлении комментария');
+    }
+  };
+
+  const handleUpdateComment = async (commentId) => {
+    if (!editCommentText.trim()) return;
+
+    try {
+      const response = await commentsAPI.updateComment(commentId, {
+        content: editCommentText.trim()
+      });
+      if (response.data.success) {
+        setEditingComment(null);
+        setEditCommentText('');
+        setSuccess('Комментарий успешно обновлен');
+        loadComments();
+      }
+    } catch (error) {
+      console.error('Error updating comment:', error);
+      setError(error.response?.data?.message || 'Ошибка при обновлении комментария');
+    }
+  };
+
+  const handleDeleteComment = async (commentId) => {
+    try {
+      const response = await commentsAPI.deleteComment(commentId);
+      if (response.data.success) {
+        setSuccess('Комментарий успешно удален');
+        loadComments();
+      }
+    } catch (error) {
+      console.error('Error deleting comment:', error);
+      setError(error.response?.data?.message || 'Ошибка при удалении комментария');
+    }
+  };
+
+  const startEditComment = (comment) => {
+    setEditingComment(comment.id);
+    setEditCommentText(comment.content);
+  };
+
+  const cancelEditComment = () => {
+    setEditingComment(null);
+    setEditCommentText('');
+  };
+
   const openEditDialog = () => {
     if (!defect) return;
     
@@ -354,6 +456,11 @@ const DefectDetail = () => {
   const formatDate = (dateString) => {
     if (!dateString) return 'Не указана';
     return new Date(dateString).toLocaleDateString('ru-RU');
+  };
+
+  const formatDateTime = (dateString) => {
+    if (!dateString) return 'Не указана';
+    return new Date(dateString).toLocaleString('ru-RU');
   };
 
   const getStatusInfo = (statusId) => {
@@ -543,7 +650,7 @@ const DefectDetail = () => {
 
       <Grid container spacing={3}>
         <Grid item xs={12} md={8}>
-          <Paper sx={{ p: 3 }}>
+          <Paper sx={{ p: 3, mb: 3 }}>
             <Typography variant="h6" gutterBottom>
               Информация
             </Typography>
@@ -680,6 +787,130 @@ const DefectDetail = () => {
               </Paper>
             </Grid>
           </Grid>
+        </Grid>
+
+        <Grid item xs={12}>
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <CommentIcon />
+              Комментарии
+            </Typography>
+
+            {canComment() && (
+              <Box sx={{ mb: 3 }}>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={3}
+                  placeholder="Добавить комментарий..."
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  variant="outlined"
+                  sx={{ mb: 1 }}
+                />
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                  <Button
+                    variant="contained"
+                    onClick={handleAddComment}
+                    disabled={!newComment.trim()}
+                  >
+                    Добавить комментарий
+                  </Button>
+                </Box>
+              </Box>
+            )}
+
+            <Divider sx={{ my: 2 }} />
+
+            {commentsLoading ? (
+              <Box display="flex" justifyContent="center" py={3}>
+                <CircularProgress />
+              </Box>
+            ) : comments.length === 0 ? (
+              <Typography color="text.secondary" textAlign="center" py={3}>
+                Комментариев пока нет
+              </Typography>
+            ) : (
+              <Box sx={{ maxHeight: '600px', overflowY: 'auto' }}>
+                {comments.map((comment) => (
+                  <Card key={comment.id} sx={{ mb: 2, border: '1px solid', borderColor: 'divider' }}>
+                    <CardContent sx={{ pb: 1 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
+                            {comment.user?.full_name?.charAt(0) || 'U'}
+                          </Avatar>
+                          <Box>
+                            <Typography variant="subtitle2" fontWeight="bold">
+                              {comment.user?.full_name}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {formatDateTime(comment.created_at)}
+                            </Typography>
+                          </Box>
+                        </Box>
+                        
+                        {comment.user_id === user.id && (
+                          <Box>
+                            <IconButton
+                              size="small"
+                              onClick={() => startEditComment(comment)}
+                              title="Редактировать"
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton
+                              size="small"
+                              onClick={() => setDeleteCommentDialog({ open: true, commentId: comment.id, commentContent: comment.content })}
+                              title="Удалить"
+                              color="error"
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Box>
+                        )}
+                      </Box>
+
+                      {editingComment === comment.id ? (
+                        <Box>
+                          <TextField
+                            fullWidth
+                            multiline
+                            rows={3}
+                            value={editCommentText}
+                            onChange={(e) => setEditCommentText(e.target.value)}
+                            variant="outlined"
+                            size="small"
+                            sx={{ mb: 1 }}
+                          />
+                          <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                            <Button
+                              size="small"
+                              onClick={cancelEditComment}
+                            >
+                              Отмена
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              onClick={() => handleUpdateComment(comment.id)}
+                              disabled={!editCommentText.trim()}
+                            >
+                              Сохранить
+                            </Button>
+                          </Box>
+                        </Box>
+                      ) : (
+                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                          {comment.content}
+                        </Typography>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </Box>
+            )}
+          </Paper>
         </Grid>
       </Grid>
 
@@ -967,6 +1198,57 @@ const DefectDetail = () => {
             disabled={loading}
           >
             {loading ? <CircularProgress size={24} /> : 'Обновить'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog 
+        open={deleteCommentDialog.open} 
+        onClose={() => setDeleteCommentDialog({ open: false, commentId: null, commentContent: '' })}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Подтверждение удаления</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Вы уверены, что хотите удалить этот комментарий?
+          </Typography>
+          {deleteCommentDialog.commentContent && (
+            <Paper 
+              variant="outlined" 
+              sx={{ 
+                p: 2, 
+                mt: 2, 
+                backgroundColor: 'grey.50',
+                maxHeight: '120px',
+                overflow: 'auto'
+              }}
+            >
+              <Typography variant="body2" color="text.secondary">
+                {deleteCommentDialog.commentContent.length > 200 
+                  ? deleteCommentDialog.commentContent.substring(0, 200) + '...' 
+                  : deleteCommentDialog.commentContent
+                }
+              </Typography>
+            </Paper>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setDeleteCommentDialog({ open: false, commentId: null, commentContent: '' })}
+            variant="outlined"
+          >
+            Отмена
+          </Button>
+          <Button 
+            onClick={() => {
+              handleDeleteComment(deleteCommentDialog.commentId);
+              setDeleteCommentDialog({ open: false, commentId: null, commentContent: '' });
+            }} 
+            color="error" 
+            variant="contained"
+          >
+            Удалить
           </Button>
         </DialogActions>
       </Dialog>

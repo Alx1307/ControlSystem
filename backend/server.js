@@ -6,8 +6,9 @@ require('dotenv').config();
 
 const userRoutes = require('./src/routes/userRoutes');
 const objectsRoutes = require('./src/routes/objectsRoutes');
-const defectRouter = require('./src/routes/defectRoutes');
-const historyRouter = require('./src/routes/historyRoutes');
+const defectRoutes = require('./src/routes/defectRoutes');
+const historyRoutes = require('./src/routes/historyRoutes');
+const commentRoutes = require('./src/routes/commentRoutes');
 
 const app = express();
 app.use(express.json());
@@ -18,8 +19,9 @@ app.use(cors({
 
 app.use('/', userRoutes);
 app.use('/objects', objectsRoutes);
-app.use('/defects', defectRouter);
-app.use('/history', historyRouter);
+app.use('/defects', defectRoutes);
+app.use('/history', historyRoutes);
+app.use('/comments', commentRoutes);
 
 const PORT = process.env.PORT;
 app.listen(PORT, async () => {
