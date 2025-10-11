@@ -162,31 +162,45 @@ const Layout = ({ children }) => {
         </Typography>
       </Toolbar>
       <List>
-        {menuItems.map((item) => (
-          <ListItem key={item.text} disablePadding>
-            <ListItemButton
-              onClick={() => {
-                navigate(item.path);
-                setMobileOpen(false);
-              }}
-              selected={location.pathname === item.path}
-              sx={{
-                '&.Mui-selected': {
-                  backgroundColor: 'primary.light',
-                  color: 'white',
-                  '&:hover': {
-                    backgroundColor: 'primary.main',
+        {menuItems.map((item) => {
+          const isSelected = location.pathname === item.path;
+          return (
+            <ListItem key={item.text} disablePadding>
+              <ListItemButton
+                onClick={() => {
+                  navigate(item.path);
+                  setMobileOpen(false);
+                }}
+                selected={isSelected}
+                sx={{
+                  '&.Mui-selected': {
+                    backgroundColor: 'primary.light',
+                    color: 'white',
+                    '&:hover': {
+                      backgroundColor: 'primary.main',
+                    },
+                    '& .MuiListItemIcon-root': {
+                      color: 'white',
+                    },
                   },
-                },
-              }}
-            >
-              <ListItemIcon>
-                {item.icon}
-              </ListItemIcon>
-              <ListItemText primary={item.text} />
-            </ListItemButton>
-          </ListItem>
-        ))}
+                  '&:hover': {
+                    backgroundColor: 'action.hover',
+                  },
+                }}
+              >
+                <ListItemIcon
+                  sx={{
+                    color: isSelected ? 'white' : 'inherit',
+                    minWidth: 40,
+                  }}
+                >
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText primary={item.text} />
+              </ListItemButton>
+            </ListItem>
+          );
+        })}
       </List>
     </div>
   );

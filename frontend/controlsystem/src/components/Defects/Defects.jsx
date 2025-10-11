@@ -23,7 +23,12 @@ import {
   InputLabel,
   Select,
   Chip,
-  Tooltip 
+  Tooltip,
+  Card,
+  CardContent,
+  Grid,
+  InputAdornment,
+  TablePagination
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -31,14 +36,16 @@ import {
   Edit as EditIcon,
   Engineering as AssignIcon,
   Checklist as UpdateStatusIcon,
-  Warning as WarningIcon
+  Warning as WarningIcon,
+  Search as SearchIcon,
+  FilterList as FilterIcon,
+  Sort as SortIcon
 } from '@mui/icons-material';
 import { defectsAPI, usersAPI, historyAPI, objectsAPI } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 
 const Defects = () => {
   const navigate = useNavigate();
-
   const [defects, setDefects] = useState([]);
   const [objects, setObjects] = useState([]);
   const [engineers, setEngineers] = useState([]);
@@ -63,6 +70,23 @@ const Defects = () => {
   const [formErrors, setFormErrors] = useState({});
   const [selectedEngineer, setSelectedEngineer] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
+  const [searchParams, setSearchParams] = useState({
+    title: '',
+    description: '',
+    object_id: '',
+    status_id: '',
+    priority_id: '',
+    assignee_id: '',
+    sortBy: 'title',
+    sortOrder: 'ASC'
+  });
+  const [pagination, setPagination] = useState({
+    page: 0,
+    limit: 10,
+    total: 0,
+    totalPages: 0
+  });
+  const [showFilters, setShowFilters] = useState(false);
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isManager = user.role === 'Менеджер';
@@ -80,6 +104,15 @@ const Defects = () => {
     { id: 1, name: 'Низкий', color: 'success' },
     { id: 2, name: 'Средний', color: 'warning' },
     { id: 3, name: 'Высокий', color: 'error' }
+  ];
+
+  const sortOptions = [
+    { value: 'title:ASC', label: 'Название (А-Я)' },
+    { value: 'title:DESC', label: 'Название (Я-А)' },
+    { value: 'due_date:ASC', label: 'Срок (сначала ближайшие)' },
+    { value: 'due_date:DESC', label: 'Срок (сначала поздние)' },
+    { value: 'priority_id:DESC', label: 'Приоритет (высокий → низкий)' },
+    { value: 'priority_id:ASC', label: 'Приоритет (низкий → высокий)' }
   ];
 
   const isDefectOverdue = (defect) => {
@@ -126,15 +159,32 @@ const Defects = () => {
     if (isManager) {
       loadEngineers();
     }
-  }, []);
+  }, [searchParams, pagination.page, pagination.limit]);
 
   const loadDefects = async () => {
     setLoading(true);
     setError('');
     try {
-      const response = await defectsAPI.getAllDefects();
+      const params = {
+        ...searchParams,
+        page: pagination.page + 1,
+        limit: pagination.limit
+      };
+
+      Object.keys(params).forEach(key => {
+        if (params[key] === '' || params[key] === null) {
+          delete params[key];
+        }
+      });
+
+      const response = await defectsAPI.searchDefects(params);
       if (response.data.success) {
         setDefects(response.data.defects || []);
+        setPagination(prev => ({
+          ...prev,
+          total: response.data.pagination?.total || response.data.defects?.length || 0,
+          totalPages: response.data.pagination?.totalPages || 1
+        }));
       }
     } catch (error) {
       console.error('Error loading defects:', error);
@@ -295,6 +345,51 @@ const Defects = () => {
     }
   };
 
+  const handleSearchChange = (field, value) => {
+    setSearchParams(prev => ({ ...prev, [field]: value }));
+    setPagination(prev => ({ ...prev, page: 0 }));
+  };
+
+  const handleSortChange = (value) => {
+    const [sortBy, sortOrder] = value.split(':');
+    setSearchParams(prev => ({ ...prev, sortBy, sortOrder }));
+  };
+
+  const handleFilterChange = (field, value) => {
+    setSearchParams(prev => ({ ...prev, [field]: value }));
+    setPagination(prev => ({ ...prev, page: 0 }));
+  };
+
+  const clearFilters = () => {
+    setSearchParams({
+      title: '',
+      description: '',
+      object_id: '',
+      status_id: '',
+      priority_id: '',
+      assignee_id: '',
+      sortBy: 'title',
+      sortOrder: 'ASC'
+    });
+    setPagination(prev => ({ ...prev, page: 0 }));
+  };
+
+  const handlePageChange = (event, newPage) => {
+    setPagination(prev => ({ ...prev, page: newPage }));
+  };
+
+  const handleRowsPerPageChange = (event) => {
+    setPagination(prev => ({
+      ...prev,
+      limit: parseInt(event.target.value, 10),
+      page: 0
+    }));
+  };
+
+  const hasActiveFilters = () => {
+    return searchParams.title || searchParams.description || searchParams.object_id || searchParams.status_id || searchParams.priority_id || searchParams.assignee_id;
+  };
+
   const openAddDialog = () => {
     setFormData({ title: '', description: '', object_id: '', priority_id: '2', due_date: '' });
     setFormErrors({});
@@ -412,18 +507,174 @@ const Defects = () => {
         </Alert>
       )}
 
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                placeholder="Поиск по названию..."
+                value={searchParams.title}
+                onChange={(e) => handleSearchChange('title', e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <FormControl fullWidth>
+                <InputLabel>Сортировка</InputLabel>
+                <Select
+                  value={`${searchParams.sortBy}:${searchParams.sortOrder}`}
+                  onChange={(e) => handleSortChange(e.target.value)}
+                  label="Сортировка"
+                  startAdornment={
+                    <InputAdornment position="start">
+                      <SortIcon />
+                    </InputAdornment>
+                  }
+                >
+                  {sortOptions.map(option => (
+                    <MenuItem key={option.value} value={option.value}>
+                      {option.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Button
+                fullWidth
+                variant="outlined"
+                startIcon={<FilterIcon />}
+                onClick={() => setShowFilters(!showFilters)}
+                color={hasActiveFilters() ? "primary" : "inherit"}
+              >
+                Фильтры {hasActiveFilters() && '•'}
+              </Button>
+            </Grid>
+          </Grid>
+
+          {showFilters && (
+            <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={3}>
+                  <FormControl fullWidth>
+                    <InputLabel shrink={true}>Статус</InputLabel>
+                    <Select
+                      value={searchParams.status_id || ''}
+                      onChange={(e) => handleFilterChange('status_id', e.target.value)}
+                      label="Статус"
+                      displayEmpty
+                    >
+                      <MenuItem value="">
+                        <em>Все статусы</em>
+                      </MenuItem>
+                      {defectStatuses.map(status => (
+                        <MenuItem key={status.id} value={status.id}>
+                          {status.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <FormControl fullWidth>
+                    <InputLabel shrink={true}>Приоритет</InputLabel>
+                    <Select
+                      value={searchParams.priority_id || ''}
+                      onChange={(e) => handleFilterChange('priority_id', e.target.value)}
+                      label="Приоритет"
+                      displayEmpty
+                    >
+                      <MenuItem value="">
+                        <em>Все приоритеты</em>
+                      </MenuItem>
+                      {defectPriorities.map(priority => (
+                        <MenuItem key={priority.id} value={priority.id}>
+                          {priority.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <FormControl fullWidth>
+                    <InputLabel shrink={true}>Объект</InputLabel>
+                    <Select
+                      value={searchParams.object_id || ''}
+                      onChange={(e) => handleFilterChange('object_id', e.target.value)}
+                      label="Объект"
+                      displayEmpty
+                    >
+                      <MenuItem value="">
+                        <em>Все объекты</em>
+                      </MenuItem>
+                      {objects.map(object => (
+                        <MenuItem key={object.id} value={object.id}>
+                          {object.name} - {object.address}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                {isManager && (
+                  <Grid item xs={12} md={3}>
+                    <FormControl fullWidth>
+                      <InputLabel shrink={true}>Исполнитель</InputLabel>
+                      <Select
+                        value={searchParams.assignee_id || ''}
+                        onChange={(e) => handleFilterChange('assignee_id', e.target.value)}
+                        label="Исполнитель"
+                        displayEmpty
+                      >
+                        <MenuItem value="">
+                          <em>Все исполнители</em>
+                        </MenuItem>
+                        <MenuItem value="unassigned">Не назначен</MenuItem>
+                        {engineers.map(engineer => (
+                          <MenuItem key={engineer.id} value={engineer.id}>
+                            {engineer.full_name}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                )}
+                <Grid item xs={12}>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    color="secondary"
+                    onClick={clearFilters}
+                    disabled={!hasActiveFilters()}
+                    sx={{ height: '56px' }}
+                  >
+                    Сбросить фильтры
+                  </Button>
+                </Grid>
+              </Grid>
+            </Box>
+          )}
+        </CardContent>
+      </Card>
+
       <Paper>
         <TableContainer>
-          <Table>
+          <Table sx={{ minWidth: 60 }}>
             <TableHead>
               <TableRow>
-                <TableCell>Название</TableCell>
-                <TableCell>Объект</TableCell>
-                <TableCell>Статус</TableCell>
-                <TableCell>Приоритет</TableCell>
-                <TableCell>Исполнитель</TableCell>
-                <TableCell>Срок</TableCell>
-                <TableCell align="center">Действия</TableCell>
+                <TableCell sx={{ width: '22%', minWidth: 150 }}>Название</TableCell>
+                <TableCell sx={{ width: '18%', minWidth: 140 }}>Объект</TableCell>
+                <TableCell sx={{ width: '10%', minWidth: 100 }}>Статус</TableCell>
+                <TableCell sx={{ width: '10%', minWidth: 100 }}>Приоритет</TableCell>
+                <TableCell sx={{ width: '15%', minWidth: 130 }}>Исполнитель</TableCell>
+                <TableCell sx={{ width: '10%', minWidth: 100 }}>Срок</TableCell>
+                <TableCell sx={{ width: '15%', minWidth: 140 }} align="center">Действия</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -436,7 +687,7 @@ const Defects = () => {
               ) : defects.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} align="center">
-                    Нет данных о дефектах
+                    {hasActiveFilters() ? 'Нет дефектов, соответствующих фильтрам' : 'Нет данных о дефектах'}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -457,46 +708,83 @@ const Defects = () => {
                         }
                       }}
                     >
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <TableCell sx={{ width: '22%', minWidth: 180, py: 1 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                           <Button
                             onClick={() => openDefectDetail(defect)}
-                            sx={{ textTransform: 'none', justifyContent: 'flex-start' }}
+                            sx={{ 
+                              textTransform: 'none', 
+                              justifyContent: 'flex-start',
+                              textAlign: 'left',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              flex: 1,
+                              maxWidth: 'calc(100% - 28px)',
+                              minWidth: 0,
+                              fontSize: '0.8125rem',
+                              py: 0.5,
+                              px: 1
+                            }}
                             color="primary"
                           >
                             {defect.title}
                           </Button>
                           {isOverdue && (
                             <Tooltip title={`Просрочен на ${overdueDays} ${overdueDays === 1 ? 'день' : overdueDays < 5 ? 'дня' : 'дней'}`}>
-                              <WarningIcon color="error" fontSize="small" />
+                              <WarningIcon color="error" fontSize="small" sx={{ flexShrink: 0 }} />
                             </Tooltip>
                           )}
                         </Box>
                       </TableCell>
-                      <TableCell>{defect.object?.name}</TableCell>
-                      <TableCell>
+                      <TableCell sx={{ width: '18%', minWidth: 140, py: 1 }}>
+                        <Typography 
+                          sx={{ 
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            fontSize: '0.8125rem'
+                          }}
+                        >
+                          {defect.object?.name}
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={{ width: '10%', minWidth: 100, py: 1 }}>
                         <Chip 
                           label={statusInfo.name} 
                           color={statusInfo.color} 
                           size="small" 
+                          sx={{ fontSize: '0.75rem' }}
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ width: '10%', minWidth: 100, py: 1 }}>
                         <Chip 
                           label={priorityInfo.name} 
                           color={priorityInfo.color} 
                           size="small" 
+                          sx={{ fontSize: '0.75rem' }}
                         />
                       </TableCell>
-                      <TableCell>
-                        {defect.assignee?.full_name || 'Не назначен'}
+                      <TableCell sx={{ width: '15%', minWidth: 130, py: 1 }}>
+                        <Typography 
+                          sx={{ 
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            fontSize: '0.8125rem'
+                          }}
+                        >
+                          {defect.assignee?.full_name || 'Не назначен'}
+                        </Typography>
                       </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <TableCell sx={{ width: '10%', minWidth: 100, py: 1 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                           <Typography 
                             sx={{ 
                               color: isOverdue ? 'error.main' : 'inherit',
-                              fontWeight: isOverdue ? 'bold' : 'normal'
+                              fontWeight: isOverdue ? 'bold' : 'normal',
+                              whiteSpace: 'nowrap',
+                              fontSize: '0.8125rem'
                             }}
                           >
                             {formatDate(defect.due_date)}
@@ -507,47 +795,63 @@ const Defects = () => {
                               color="error" 
                               size="small" 
                               variant="outlined"
+                              sx={{ fontSize: '0.7rem', height: 20 }}
                             />
                           )}
                         </Box>
                       </TableCell>
-                      <TableCell align="center">
-                        {canChangeStatus(defect) && (
-                          <IconButton
-                            color="success"
-                            onClick={() => openStatusDialog(defect)}
-                            title="Изменить статус"
-                          >
-                            <UpdateStatusIcon />
-                          </IconButton>
-                        )}
-                        {canAssignDefect(defect) && (
-                          <IconButton
-                            color="info"
-                            onClick={() => openAssignDialog(defect)}
-                            title="Назначить инженера"
-                          >
-                            <AssignIcon />
-                          </IconButton>
-                        )}
-                        {canEditDefect(defect) && (
-                          <>
+                      <TableCell sx={{ width: '15%', minWidth: 140, py: 1 }} align="center">
+                        <Box sx={{ 
+                          display: 'flex', 
+                          justifyContent: 'center', 
+                          gap: 0.25,
+                          flexWrap: 'nowrap'
+                        }}>
+                          {canChangeStatus(defect) && (
                             <IconButton
-                              color="warning"
-                              onClick={() => openEditDialog(defect)}
-                              title="Редактировать"
+                              color="success"
+                              onClick={() => openStatusDialog(defect)}
+                              title="Изменить статус"
+                              size="small"
+                              sx={{ minWidth: 32, width: 32, height: 32 }}
                             >
-                              <EditIcon />
+                              <UpdateStatusIcon fontSize="small" />
                             </IconButton>
+                          )}
+                          {canAssignDefect(defect) && (
                             <IconButton
-                              color="error"
-                              onClick={() => openDeleteDialog(defect)}
-                              title="Удалить"
+                              color="info"
+                              onClick={() => openAssignDialog(defect)}
+                              title="Назначить инженера"
+                              size="small"
+                              sx={{ minWidth: 32, width: 32, height: 32 }}
                             >
-                              <DeleteIcon />
+                              <AssignIcon fontSize="small" />
                             </IconButton>
-                          </>
-                        )}
+                          )}
+                          {canEditDefect(defect) && (
+                            <>
+                              <IconButton
+                                color="warning"
+                                onClick={() => openEditDialog(defect)}
+                                title="Редактировать"
+                                size="small"
+                                sx={{ minWidth: 32, width: 32, height: 32 }}
+                              >
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                              <IconButton
+                                color="error"
+                                onClick={() => openDeleteDialog(defect)}
+                                title="Удалить"
+                                size="small"
+                                sx={{ minWidth: 32, width: 32, height: 32 }}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </>
+                          )}
+                        </Box>
                       </TableCell>
                     </TableRow>
                   );
@@ -556,6 +860,20 @@ const Defects = () => {
             </TableBody>
           </Table>
         </TableContainer>
+        
+        <TablePagination
+          rowsPerPageOptions={[5, 10, 25, 50]}
+          component="div"
+          count={pagination.total}
+          rowsPerPage={pagination.limit}
+          page={pagination.page}
+          onPageChange={handlePageChange}
+          onRowsPerPageChange={handleRowsPerPageChange}
+          labelRowsPerPage="Строк на странице:"
+          labelDisplayedRows={({ from, to, count }) => 
+            `${from}-${to} из ${count !== -1 ? count : `более ${to}`}`
+          }
+        />
       </Paper>
 
       <Dialog open={addDialogOpen} onClose={closeAllDialogs} maxWidth="md" fullWidth>

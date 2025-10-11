@@ -546,18 +546,40 @@ class DefectsController {
 
     async searchDefects(req, res) {
         try {
-            const { title, description, object_id, status_id, priority_id, assignee_id, reporter_id } = req.query;
+            const { 
+                title, 
+                description, 
+                object_id, 
+                status_id, 
+                priority_id, 
+                assignee_id, 
+                reporter_id,
+                page = 1,
+                limit = 10,
+                sortBy = 'title',
+                sortOrder = 'ASC'
+            } = req.query;
+            
             const where = {};
+            const order = [[sortBy, sortOrder.toUpperCase()]];
     
             if (title) where.title = { [Op.iLike]: `%${title}%` };
             if (description) where.description = { [Op.iLike]: `%${description}%` };
             if (object_id) where.object_id = object_id;
             if (status_id) where.status_id = status_id;
             if (priority_id) where.priority_id = priority_id;
-            if (assignee_id) where.assignee_id = assignee_id;
+            if (assignee_id) {
+                if (assignee_id === 'unassigned') {
+                    where.assignee_id = { [Op.is]: null };
+                } else {
+                    where.assignee_id = assignee_id;
+                }
+            }
             if (reporter_id) where.reporter_id = reporter_id;
     
-            const defects = await this.Defect.findAll({
+            const offset = (page - 1) * limit;
+    
+            const { count, rows: defects } = await this.Defect.findAndCountAll({
                 where,
                 include: [
                     { model: User, as: 'reporter', attributes: ['id', 'full_name', 'email'] },
@@ -565,12 +587,21 @@ class DefectsController {
                     { model: DefectStatus, as: 'status', attributes: ['id', 'name'] },
                     { model: DefectPriority, as: 'priority', attributes: ['id', 'name'] },
                     { model: Objects, as: 'object', attributes: ['id', 'name', 'address'] }
-                ]
+                ],
+                order,
+                limit: parseInt(limit),
+                offset: parseInt(offset)
             });
     
             res.status(200).json({
                 success: true,
-                defects
+                defects,
+                pagination: {
+                    total: count,
+                    totalPages: Math.ceil(count / limit),
+                    currentPage: parseInt(page),
+                    limit: parseInt(limit)
+                }
             });
         } catch (error) {
             console.error('Ошибка при поиске дефектов:', error);
