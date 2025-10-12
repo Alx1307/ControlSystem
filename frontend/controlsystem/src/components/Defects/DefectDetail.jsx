@@ -46,7 +46,9 @@ import {
   MoreVert as MoreVertIcon,
   Download as DownloadIcon,
   Visibility as PreviewIcon,
-  Add as AddIcon
+  Add as AddIcon,
+  Schedule as ScheduleIcon,
+  CheckCircle as CompletedIcon
 } from '@mui/icons-material';
 import { defectsAPI, historyAPI, objectsAPI, usersAPI, commentsAPI, attachmentsAPI  } from '../../services/api';
 
@@ -141,10 +143,7 @@ const DefectDetail = () => {
     if (!defect || !defect.due_date) return false;
     
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
     const dueDate = new Date(defect.due_date);
-    dueDate.setHours(0, 0, 0, 0);
     
     const completedStatuses = [4, 5];
     
@@ -164,6 +163,95 @@ const DefectDetail = () => {
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
     return Math.max(0, diffDays);
+  };
+
+  const getCompletionTime = (defect) => {
+    if (!defect || !defect.completed_at) return null;
+    
+    const created = new Date(defect.created_at);
+    const completed = new Date(defect.completed_at);
+    
+    const diffTime = completed - created;
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    const diffHours = Math.floor((diffTime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    
+    return { days: diffDays, hours: diffHours };
+  };
+
+  const formatCompletionTime = (completionTime) => {
+    if (!completionTime) return null;
+    
+    const { days, hours } = completionTime;
+    
+    if (days === 0 && hours === 0) {
+      return 'Менее часа';
+    }
+    
+    const daysText = days === 0 ? '' : `${days} ${getDayText(days)}`;
+    const hoursText = hours === 0 ? '' : `${hours} ${getHourText(hours)}`;
+    
+    if (days > 0 && hours > 0) {
+      return `${daysText} ${hoursText}`;
+    } else if (days > 0) {
+      return daysText;
+    } else {
+      return hoursText;
+    }
+  };
+
+  const getDayText = (days) => {
+    if (days === 1) return 'день';
+    if (days >= 2 && days <= 4) return 'дня';
+    return 'дней';
+  };
+  
+  const getHourText = (hours) => {
+    if (hours === 1) return 'час';
+    if (hours >= 2 && hours <= 4) return 'часа';
+    return 'часов';
+  };
+
+  const getTimeToDeadline = (defect) => {
+    if (!defect || !defect.due_date) return null;
+    
+    const today = new Date();
+    const dueDate = new Date(defect.due_date);
+    
+    const diffTime = dueDate - today;
+    
+    if (diffTime <= 0) {
+      return { days: 0, hours: 0, isOverdue: true };
+    }
+    
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    const diffHours = Math.floor((diffTime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    
+    return { days: diffDays, hours: diffHours, isOverdue: false };
+  };
+
+  const formatTimeToDeadline = (timeToDeadline) => {
+    if (!timeToDeadline) return null;
+    
+    if (timeToDeadline.isOverdue) {
+      return 'Просрочен';
+    }
+    
+    const { days, hours } = timeToDeadline;
+    
+    if (days === 0 && hours === 0) {
+      return 'Менее часа';
+    }
+    
+    const daysText = days === 0 ? '' : `${days} ${getDayText(days)}`;
+    const hoursText = hours === 0 ? '' : `${hours} ${getHourText(hours)}`;
+    
+    if (days > 0 && hours > 0) {
+      return `${daysText} ${hoursText}`;
+    } else if (days > 0) {
+      return daysText;
+    } else {
+      return hoursText;
+    }
   };
 
   const getAvailableStatuses = (currentStatusId) => {
@@ -641,7 +729,9 @@ const DefectDetail = () => {
       status_id: 'Статус',
       assignee_id: 'Исполнитель',
       due_date: 'Срок выполнения',
-      reporter_id: 'Создатель'
+      reporter_id: 'Создатель',
+      created_at: 'Дата создания',
+      completed_at: 'Дата выполнения'
     };
     return labels[field] || field;
   };
@@ -649,8 +739,8 @@ const DefectDetail = () => {
   const formatHistoryValue = (field, value, historyItem = null, isOld = false) => {
     if (!value && value !== 0) return 'Не указано';
     
-    if (field.includes('date')) {
-      return formatDate(value);
+    if (field.includes('date') || field.includes('_at')) {
+      return formatDateTime(value);
     }
     
     if (field === 'status_id') {
@@ -742,6 +832,8 @@ const DefectDetail = () => {
   const priorityInfo = getPriorityInfo(defect.priority_id);
   const isOverdue = isDefectOverdue(defect);
   const overdueDays = getOverdueDays(defect.due_date);
+  const completionTime = getCompletionTime(defect);
+  const timeToDeadline = getTimeToDeadline(defect);
 
   return (
     <Box>
@@ -769,7 +861,7 @@ const DefectDetail = () => {
               </Tooltip>
             )}
           </Box>
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
             <Chip label={statusInfo.name} color={statusInfo.color} />
             <Chip label={priorityInfo.name} color={priorityInfo.color} />
             {isOverdue && (
@@ -862,6 +954,35 @@ const DefectDetail = () => {
                 <Typography variant="body1">
                   {formatDate(defect.due_date)}
                 </Typography>
+                {defect.due_date && timeToDeadline !== null && !timeToDeadline.isOverdue && timeToDeadline.days + timeToDeadline.hours > 0 && (
+                  <Typography variant="body2" color="info.main">
+                    Осталось: {formatTimeToDeadline(timeToDeadline)}
+                  </Typography>
+                )}
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <ScheduleIcon fontSize="small" />
+                  Дата создания
+                </Typography>
+                <Typography variant="body1">
+                  {formatDateTime(defect.created_at)}
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <CompletedIcon fontSize="small" />
+                  Дата выполнения
+                </Typography>
+                <Typography variant="body1">
+                  {defect.completed_at ? formatDateTime(defect.completed_at) : 'Не выполнено'}
+                </Typography>
+                {completionTime !== null && (
+                  <Typography variant="body2" color="success.main">
+                    Время выполнения: {formatCompletionTime(completionTime)}
+                  </Typography>
+                )}
               </Grid>
             </Grid>
           </Paper>
@@ -1020,19 +1141,40 @@ const DefectDetail = () => {
             <Grid item xs={12}>
               <Paper sx={{ p: 2 }}>
                 <Typography variant="h6" gutterBottom>
-                  Статус
+                  Статус и время
                 </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="body2">Статус:</Typography>
-                    <Box sx={{ width: 8 }} />
                     <Chip label={statusInfo.name} color={statusInfo.color} size="small" />
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="body2">Приоритет:</Typography>
-                    <Box sx={{ width: 8 }} />
                     <Chip label={priorityInfo.name} color={priorityInfo.color} size="small" />
                   </Box>
+                  <Divider />
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="body2">Создан:</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {formatDate(defect.created_at)}
+                    </Typography>
+                  </Box>
+                  {defect.completed_at && (
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Typography variant="body2">Выполнен:</Typography>
+                      <Typography variant="body2" color="success.main">
+                        {formatDate(defect.completed_at)}
+                      </Typography>
+                    </Box>
+                  )}
+                  {completionTime !== null && (
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Typography variant="body2">Время выполнения:</Typography>
+                      <Typography variant="body2" color="info.main">
+                        {formatCompletionTime(completionTime)}
+                      </Typography>
+                    </Box>
+                  )}
                 </Box>
               </Paper>
             </Grid>

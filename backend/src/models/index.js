@@ -7,6 +7,7 @@ const Comment = require('./Comment');
 const Attachment = require('./Attachment');
 const ChangeHistory = require('./ChangeHistory');
 const DefectStatus = require('./DefectStatus');
+const Report = require('./Report');
 
 Role.hasMany(User, { foreignKey: 'role_id' });
 User.belongsTo(Role, { foreignKey: 'role_id', as: 'role' });
@@ -40,6 +41,9 @@ Attachment.belongsTo(User, { foreignKey: 'uploaded_by', as: 'uploadedBy' });
 User.hasMany(ChangeHistory, { foreignKey: 'user_id' });
 ChangeHistory.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
+User.hasMany(Report, { foreignKey: 'created_by', as: 'reports' });
+Report.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
+
 module.exports = {
     User,
     Role,
@@ -49,5 +53,6 @@ module.exports = {
     Comment,
     Attachment,
     ChangeHistory,
-    DefectStatus
+    DefectStatus,
+    Report
 };

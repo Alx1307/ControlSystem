@@ -11,6 +11,7 @@ import Defects from './components/Defects/Defects';
 import Employees from './components/Employees/Employees';
 import DefectDetail from './components/Defects/DefectDetail';
 import ObjectDetail from './components/Objects/ObjectDetail';
+import Analytics from './components/Analytics/Analytics';
 
 const theme = createTheme({
   palette: {
@@ -84,6 +85,7 @@ function App() {
                     <Route path="/defects" element={<Defects />} />
                     <Route path="/defects/:defectId" element={<DefectDetail />} />
                     <Route path="/employees" element={<Employees />} />
+                    <Route path="/analytics" element={<Analytics />} />
                   </Routes>
                 </ProtectedLayout>
               </ProtectedRoute>

@@ -88,6 +88,9 @@ class DefectsController {
                 }
             }
 
+            const now = new Date();
+            const moscowTime = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Moscow" }));
+
             const newDefect = await this.Defect.create({
                 title,
                 description,
@@ -96,7 +99,9 @@ class DefectsController {
                 priority_id: priority_id || 2,
                 assignee_id: assignee_id || null,
                 reporter_id: currentUser.id,
-                due_date: due_date || null
+                due_date: due_date || null,
+                created_at: moscowTime,
+                completed_at: null 
             }, { transaction });
 
             await transaction.commit();
@@ -140,7 +145,10 @@ class DefectsController {
                     { model: DefectStatus, as: 'status', attributes: ['id', 'name'] },
                     { model: DefectPriority, as: 'priority', attributes: ['id', 'name'] },
                     { model: Objects, as: 'object', attributes: ['id', 'name', 'address'] }
-                ]
+                ],
+                attributes: { 
+                    include: ['created_at', 'completed_at']
+                }
             });
     
             res.status(200).json({
@@ -172,7 +180,10 @@ class DefectsController {
                     { model: DefectStatus, as: 'status', attributes: ['id', 'name'] },
                     { model: DefectPriority, as: 'priority', attributes: ['id', 'name'] },
                     { model: Objects, as: 'object', attributes: ['id', 'name', 'address'] }
-                ]
+                ],
+                attributes: { 
+                    include: ['created_at', 'completed_at']
+                }
             });
     
             if (!defect) {
@@ -301,13 +312,27 @@ class DefectsController {
             }
     
             await defect.update({ assignee_id }, { transaction });
+
+            const updatedDefect = await this.Defect.findByPk(defectId, {
+                include: [
+                    { model: User, as: 'reporter', attributes: ['id', 'full_name', 'email'] },
+                    { model: User, as: 'assignee', attributes: ['id', 'full_name', 'email'] },
+                    { model: DefectStatus, as: 'status', attributes: ['id', 'name'] },
+                    { model: DefectPriority, as: 'priority', attributes: ['id', 'name'] },
+                    { model: Objects, as: 'object', attributes: ['id', 'name', 'address'] }
+                ],
+                attributes: { 
+                    include: ['created_at', 'completed_at']
+                },
+                transaction
+            });
     
             await transaction.commit();
     
             res.status(200).json({
                 success: true,
                 message: 'Исполнитель успешно назначен.',
-                defect
+                defect: updatedDefect
             });
         } catch (error) {
             await transaction.rollback();
@@ -381,16 +406,16 @@ class DefectsController {
             const { defectId } = req.params;
             const { status_id } = req.body;
             const currentUser = req.user;
-
+    
             await this._setCurrentUserId(currentUser.id, transaction);
-
+    
             const defect = await this.Defect.findByPk(defectId, {
                 include: [
                     { model: DefectStatus, as: 'status', attributes: ['id', 'name'] }
                 ],
                 transaction
             });
-
+    
             if (!defect) {
                 await transaction.rollback();
                 return res.status(404).json({
@@ -398,7 +423,7 @@ class DefectsController {
                     message: 'Дефект не найден.'
                 });
             }
-
+    
             if (!['Менеджер'].includes(currentUser.role) && currentUser.id !== defect.assignee_id) {
                 await transaction.rollback();
                 return res.status(403).json({
@@ -406,10 +431,10 @@ class DefectsController {
                     message: 'Только менеджеры или назначенный исполнитель могут изменять статус дефекта.'
                 });
             }
-
+    
             const currentStatusId = defect.status_id.toString();
             const currentStatusName = defect.status.name;
-
+    
             const newStatus = await DefectStatus.findByPk(status_id, { transaction });
             if (!newStatus) {
                 await transaction.rollback();
@@ -418,16 +443,16 @@ class DefectsController {
                     message: `Статус с id ${status_id} не найден.`
                 });
             }
-
+    
             const isValidTransition = await this._isStatusTransitionValid(
                 currentStatusId,
                 newStatus.id,
                 currentUser.role
             );
-
+    
             if (!isValidTransition) {
                 let errorMessage = `Невозможно изменить статус с "${currentStatusName}" на "${newStatus.name}".`;
-
+    
                 if (currentUser.role === 'Инженер' && [4, 5].includes(newStatus.id)) {
                     errorMessage = 'Инженер не может закрывать или отменять дефекты.';
                 } else if (currentUser.role === 'Менеджер' && [2, 3].includes(newStatus.id)) {
@@ -439,16 +464,27 @@ class DefectsController {
                 } else if (![4, 5].includes(newStatus.id) && currentUser.role === 'Менеджер') {
                     errorMessage = 'Менеджер может устанавливать только статусы "Закрыт" и "Отменен".';
                 }
-
+    
                 await transaction.rollback();
                 return res.status(400).json({
                     success: false,
                     message: errorMessage
                 });
             }
-
-            await defect.update({ status_id: newStatus.id }, { transaction });
-
+    
+            const updateData = { status_id: newStatus.id };
+            
+            if (newStatus.id === 4 && !defect.completed_at) {
+                const now = new Date();
+                const moscowTime = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Moscow" }));
+                updateData.completed_at = moscowTime;
+            }
+            else if (defect.status_id === 4 && newStatus.id !== 4 && defect.completed_at) {
+                updateData.completed_at = null;
+            }
+    
+            await defect.update(updateData, { transaction });
+    
             const updatedDefect = await this.Defect.findByPk(defectId, {
                 include: [
                     { model: User, as: 'reporter', attributes: ['id', 'full_name', 'email'] },
@@ -457,11 +493,14 @@ class DefectsController {
                     { model: DefectPriority, as: 'priority', attributes: ['id', 'name'] },
                     { model: Objects, as: 'object', attributes: ['id', 'name', 'address'] }
                 ],
+                attributes: { 
+                    include: ['created_at', 'completed_at']
+                },
                 transaction
             });
-
+    
             await transaction.commit();
-
+    
             res.status(200).json({
                 success: true,
                 message: 'Статус дефекта успешно обновлен.',
@@ -524,12 +563,26 @@ class DefectsController {
 
             await defect.update(updateData, { transaction });
 
+            const updatedDefect = await this.Defect.findByPk(defectId, {
+                include: [
+                    { model: User, as: 'reporter', attributes: ['id', 'full_name', 'email'] },
+                    { model: User, as: 'assignee', attributes: ['id', 'full_name', 'email'] },
+                    { model: DefectStatus, as: 'status', attributes: ['id', 'name'] },
+                    { model: DefectPriority, as: 'priority', attributes: ['id', 'name'] },
+                    { model: Objects, as: 'object', attributes: ['id', 'name', 'address'] }
+                ],
+                attributes: { 
+                    include: ['created_at', 'completed_at']
+                },
+                transaction
+            });
+
             await transaction.commit();
 
             res.status(200).json({
                 success: true,
                 message: 'Дефект успешно обновлен.',
-                defect
+                defect: updatedDefect
             });
         } catch (error) {
             await transaction.rollback();
@@ -596,6 +649,9 @@ class DefectsController {
                     { model: DefectPriority, as: 'priority', attributes: ['id', 'name'] },
                     { model: Objects, as: 'object', attributes: ['id', 'name', 'address'] }
                 ],
+                attributes: { 
+                    include: ['created_at', 'completed_at']
+                },
                 order,
                 limit: parseInt(limit),
                 offset: parseInt(offset)

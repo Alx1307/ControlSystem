@@ -25,7 +25,8 @@ import {
   Business as BusinessIcon,
   Build as DefectsIcon,
   People as PeopleIcon,
-  Menu as MenuIcon
+  Menu as MenuIcon,
+  Analytics as AnalyticsIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { usersAPI } from '../../services/api';
@@ -50,6 +51,7 @@ const Layout = ({ children }) => {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
 
   const menuItems = [
+    { text: 'Аналитика', icon: <AnalyticsIcon />, path: '/analytics' },
     { text: 'Объекты', icon: <BusinessIcon />, path: '/objects' },
     { text: 'Дефекты', icon: <DefectsIcon />, path: '/defects' },
   ];

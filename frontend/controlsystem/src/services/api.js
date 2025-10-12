@@ -154,4 +154,32 @@ export const attachmentsAPI = {
         api.get(`/attachments/preview/${attachmentId}`, {responseType: 'blob'})
 };
 
+export const analyticsAPI = {
+    getGeneralStats: () =>
+        api.get('/analytics/stats/general'),
+    
+    getDefectsReport: (params = {}) => 
+      api.get('/analytics/reports/defects', { params }),
+      
+    getObjectsReport: (params = {}) => 
+      api.get('/analytics/reports/objects', { params }),
+      
+    getPerformanceReport: (params = {}) => 
+      api.get('/analytics/reports/performance', { params }),
+      
+    downloadReport: (url, filename) => 
+      api.get(url, { responseType: 'blob' })
+        .then(response => {
+          const blob = new Blob([response.data]);
+          const downloadUrl = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = downloadUrl;
+          link.setAttribute('download', filename);
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          window.URL.revokeObjectURL(downloadUrl);
+        })
+};
+
 export default api;

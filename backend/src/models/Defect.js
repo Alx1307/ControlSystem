@@ -64,6 +64,15 @@ const Defect = sequelize.define('Defect', {
     due_date: {
         type: DataTypes.DATE,
         allowNull: true
+    },
+    created_at: {
+        type: DataTypes.DATE,
+        allowNull: false,
+        defaultValue: DataTypes.NOW
+    },
+    completed_at: {
+        type: DataTypes.DATE,
+        allowNull: true
     }
 }, {
     tableName: 'defects',

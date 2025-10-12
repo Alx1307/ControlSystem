@@ -1,22 +1,20 @@
 const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
-//класс подключения к бд с использованием паттерна Singleton
 class Database {
     constructor() {
         if (!Database.instance) {
-            //подключение к бд
             this.sequelize = new Sequelize(
                 process.env.DB_NAME,
                 process.env.DB_USER,
                 process.env.DB_PASSWORD,
                 {
                     host: process.env.DB_HOST,
-                    dialect: process.env.DB_DIALECT
+                    dialect: process.env.DB_DIALECT,
+                    timezone: '+03:00'
                 }
             );
 
-            //синхронизация таблиц бд
             this.sequelize.sync({ force: false })
                 .then(() => {
                     console.log('Модели синхронизированы с базой данных.');
@@ -31,7 +29,6 @@ class Database {
         return Database.instance;
     }
 
-    //проверка подключения к базе данных
     async authenticate() {
         try {
             await this.sequelize.authenticate();
@@ -41,7 +38,6 @@ class Database {
         }
     }
 
-    //получение единственного экземпляра подключения к бд
     static getInstance() {
         if (!Database.instance) {
             return new Database();
